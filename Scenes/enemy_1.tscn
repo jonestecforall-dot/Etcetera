@@ -1,0 +1,39 @@
+[gd_scene format=3 uid="uid://byoh223q8dv2l"]
+
+[ext_resource type="Script" uid="uid://bsvb58ggroxlx" path="res://Scripts/enemy_1.gd" id="1_mbxyh"]
+[ext_resource type="Texture2D" uid="uid://bc8fq48tsarox" path="res://World/photo_edit_2026-09-02T19-43-28.png" id="2_pjquw"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_2sf2a"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_663o1"]
+atlas = ExtResource("2_pjquw")
+region = Rect2(0, 0, 164, 227)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_g7b7a"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_663o1")
+}],
+"loop": 1,
+"name": &"idle",
+"speed": 5.0
+}]
+
+[node name="Enemy1" type="CharacterBody2D" unique_id=76827642]
+script = ExtResource("1_mbxyh")
+sprite_node_path = NodePath("AnimatedSprite2D")
+collision_node_path = NodePath("CollisionShape2D")
+audio_node_path = NodePath("AudioStreamPlayer2D")
+bounce_area_node_path = NodePath("Area2D")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1874255050]
+shape = SubResource("CircleShape2D_2sf2a")
+
+[node name="AudioStreamPlayer2D" type="AudioStreamPlayer2D" parent="." unique_id=1707751604]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=770149820]
+sprite_frames = SubResource("SpriteFrames_g7b7a")
+animation = &"idle"
+
+[node name="Area2D" type="Area2D" parent="." unique_id=1833769341]

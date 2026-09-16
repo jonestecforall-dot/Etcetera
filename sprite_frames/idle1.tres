@@ -1,0 +1,81 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://AnimationsFolder/idle.png" id="1_vnndu"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_407d6"]
+atlas = ExtResource("1_vnndu")
+region = Rect2(0, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hfvhk"]
+atlas = ExtResource("1_vnndu")
+region = Rect2(46, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_t6ay2"]
+atlas = ExtResource("1_vnndu")
+region = Rect2(92, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_u50qd"]
+atlas = ExtResource("1_vnndu")
+region = Rect2(138, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_cqmev"]
+atlas = ExtResource("1_vnndu")
+region = Rect2(184, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_up8pk"]
+atlas = ExtResource("1_vnndu")
+region = Rect2(230, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_by5s1"]
+atlas = ExtResource("1_vnndu")
+region = Rect2(276, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ae3xd"]
+atlas = ExtResource("1_vnndu")
+region = Rect2(322, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hkjec"]
+atlas = ExtResource("1_vnndu")
+region = Rect2(368, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_v3hwp"]
+atlas = ExtResource("1_vnndu")
+region = Rect2(414, 0, 46, 55)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_407d6")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_hfvhk")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_t6ay2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_u50qd")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_cqmev")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_up8pk")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_by5s1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ae3xd")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_hkjec")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_v3hwp")
+}],
+"loop": 1,
+"name": &"anim_0_0",
+"speed": 10.0
+}]

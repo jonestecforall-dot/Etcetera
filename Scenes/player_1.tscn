@@ -1,0 +1,53 @@
+[gd_scene format=3 uid="uid://b3xruhg3p2an6"]
+
+[ext_resource type="Script" uid="uid://c2aqlpuhfofrs" path="res://Scripts/player_1.gd" id="1_squ5q"]
+[ext_resource type="Texture2D" uid="uid://c0xdtc8ot0rk1" path="res://AnimationsFolder/photo_edit_2026-08-31T17-02-30.png" id="2_buxg0"]
+[ext_resource type="Script" uid="uid://dmm8qaqn1gsdv" path="res://Scripts/player_ui.gd" id="2_bxx23"]
+[ext_resource type="Script" uid="uid://bs3l5dj5r5gko" path="res://Scripts/player_anim.gd" id="2_qh3su"]
+[ext_resource type="Texture2D" uid="uid://c2mqhca5r6vc3" path="res://World/Berie's_Adventure_Seaside_Asset_Pack_Free/Berie's_Adventure_Seaside_Asset_Pack_Free/PNG/vegetation_tree_palm5.png" id="6_i66ns"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_buxg0"]
+atlas = ExtResource("2_buxg0")
+region = Rect2(0, 0, 651, 776)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_buxg0"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_buxg0")
+}],
+"loop": 1,
+"name": &"idle",
+"speed": 5.0
+}]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_8rlr6"]
+
+[node name="Player1" type="CharacterBody2D" unique_id=2145816245]
+script = ExtResource("1_squ5q")
+camera_node_path = NodePath("Camera2D")
+collision_node_path = NodePath("CollisionShape2D")
+sprite_node_path = NodePath("PlayerAnim")
+audio_node_path = NodePath("AudioStreamPlayer2D")
+ui_node_path = NodePath("PlayerUI")
+
+[node name="PlayerAnim" type="AnimatedSprite2D" parent="." unique_id=1997119313]
+scale = Vector2(0.1, 0.1)
+script = ExtResource("2_qh3su")
+sprite_frames_data = SubResource("SpriteFrames_buxg0")
+
+[node name="AudioStreamPlayer2D" type="AudioStreamPlayer2D" parent="." unique_id=1405110827]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=613703733]
+shape = SubResource("RectangleShape2D_8rlr6")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=617305400]
+zoom = Vector2(1.5, 1.5)
+
+[node name="PlayerUI" type="CanvasLayer" parent="." unique_id=508205700]
+script = ExtResource("2_bxx23")
+
+[node name="TextureRect" type="TextureRect" parent="." unique_id=2008146664]
+offset_right = 40.0
+offset_bottom = 40.0
+texture = ExtResource("6_i66ns")

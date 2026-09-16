@@ -1,0 +1,27 @@
+[gd_scene format=3 uid="uid://bbfdea7p14iog"]
+
+[ext_resource type="Script" uid="uid://e3m2uhjktbio" path="res://sprite_sheet_keeper.gd" id="1_e7xct"]
+[ext_resource type="Texture2D" uid="uid://cjkj8gwnpeife" path="res://AnimationsFolder/16x16 Rotate-Sheet.png" id="2_2ulpu"]
+[ext_resource type="Script" uid="uid://33t7ut46xdi4" path="res://sprite_sheet_ui.gd" id="4_4y2kh"]
+[ext_resource type="Texture2D" uid="uid://lv1e8ii2mpei" path="res://AnimationsFolder/16x16 Walk-Sheet.png" id="4_eq0ja"]
+[ext_resource type="Texture2D" uid="uid://2bh1lc0uq6aj" path="res://AnimationsFolder/walk.png" id="5_yhxjd"]
+[ext_resource type="Texture2D" uid="uid://dmpr5a72u343s" path="res://World/Berie's_Adventure_Seaside_Asset_Pack_Free/Berie's_Adventure_Seaside_Asset_Pack_Free/PNG/tilemap.png" id="6_eq0ja"]
+[ext_resource type="Texture2D" uid="uid://bd8wfnlg5eofn" path="res://AnimationsFolder/idle.png" id="6_y2qop"]
+[ext_resource type="Texture2D" uid="uid://n1bel27u1qna" path="res://World/Berie's_Adventure_Seaside_Asset_Pack_Free/Berie's_Adventure_Seaside_Asset_Pack_Free/Spritesheet/background.png" id="7_yhxjd"]
+[ext_resource type="Texture2D" uid="uid://c1g8h8r5o5ax2" path="res://World/Berie's_Adventure_Seaside_Asset_Pack_Free/Berie's_Adventure_Seaside_Asset_Pack_Free/Spritesheet/trap_bomb.png" id="8_y2qop"]
+
+[node name="SpriteSheetKeeper" type="Control" unique_id=936882740 node_paths=PackedStringArray("ui_canvas_layer", "animation_preview")]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_e7xct")
+sprite_sheets = Array[Texture2D]([ExtResource("6_y2qop"), ExtResource("5_yhxjd"), ExtResource("4_eq0ja"), ExtResource("2_2ulpu"), ExtResource("2_2ulpu"), ExtResource("5_yhxjd"), ExtResource("5_yhxjd"), ExtResource("5_yhxjd"), ExtResource("5_yhxjd"), ExtResource("5_yhxjd"), ExtResource("6_eq0ja"), ExtResource("7_yhxjd"), ExtResource("8_y2qop")])
+ui_canvas_layer = NodePath("SpriteSheetUI")
+animation_preview = NodePath("AnimatedSprite2D")
+debug_enabled = true
+debug_density_profiles = true
+
+[node name="SpriteSheetUI" type="CanvasLayer" parent="." unique_id=814012382]
+script = ExtResource("4_4y2kh")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=445033514]
+animation = &""

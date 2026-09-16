@@ -1,0 +1,48 @@
+[gd_scene format=3 uid="uid://dg84eb2in4kwj"]
+
+[ext_resource type="Script" uid="uid://bqksmjmiuadjy" path="res://Scripts/boss_basic_test.gd" id="1_aqotr"]
+[ext_resource type="Script" uid="uid://b27hjrygbqg5a" path="res://Scripts/test_animation.gd" id="2_pco7w"]
+[ext_resource type="Texture2D" uid="uid://cdwdm8o7k068y" path="res://AnimationsFolder/photo_edit_2026-08-31T16-06-36.png" id="2_yomfo"]
+[ext_resource type="Script" uid="uid://tw7pj0jfd6dr" path="res://Scripts/controller.gd" id="3_ht182"]
+[ext_resource type="Script" uid="uid://cwlsm7arjjrio" path="res://Scripts/boss_1_phase_logic.gd" id="4_yomfo"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_aqotr"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_yomfo"]
+atlas = ExtResource("2_yomfo")
+region = Rect2(0, 0, 275, 301)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_6qx4q"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_yomfo")
+}],
+"loop": 1,
+"name": &"idle",
+"speed": 5.0
+}]
+
+[node name="BossBasicTest" type="CharacterBody2D" unique_id=1451240053]
+script = ExtResource("1_aqotr")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1125133408]
+shape = SubResource("CircleShape2D_aqotr")
+
+[node name="TestAnimation" type="AnimatedSprite2D" parent="." unique_id=1027915370]
+scale = Vector2(2, 2)
+animation = &""
+script = ExtResource("2_pco7w")
+sprite_frames_data = SubResource("SpriteFrames_6qx4q")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1418168587]
+visible = false
+zoom = Vector2(0.7, 0.7)
+
+[node name="AudioStreamPlayer2D" type="AudioStreamPlayer2D" parent="." unique_id=122035330]
+
+[node name="Controller" type="CanvasLayer" parent="." unique_id=1734238932]
+script = ExtResource("3_ht182")
+
+[node name="Boss1PhaseLogic" type="Node" parent="." unique_id=2026026759]
+script = ExtResource("4_yomfo")

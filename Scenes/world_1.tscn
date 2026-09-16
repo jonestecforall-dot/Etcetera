@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://bfomkxddulii8"]
+
+[ext_resource type="Script" uid="uid://csfjayuun8uuy" path="res://world_1.gd" id="1_1wjj6"]
+[ext_resource type="Texture2D" uid="uid://rmvgx275bjo" path="res://World/Berie's_Adventure_Seaside_Asset_Pack_Free/Berie's_Adventure_Seaside_Asset_Pack_Free/PNG/background.png" id="2_1wjj6"]
+[ext_resource type="PackedScene" uid="uid://b3xruhg3p2an6" path="res://player_1.tscn" id="3_mqyi5"]
+
+[node name="World1" type="Control" unique_id=1046290101]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_1wjj6")
+
+[node name="WorldLayoutMain" type="TextureRect" parent="." unique_id=552459349]
+texture_filter = 1
+layout_mode = 0
+offset_left = -188.0
+offset_top = -791.0
+offset_right = 3007.0
+offset_bottom = 634.0
+texture = ExtResource("2_1wjj6")
+
+[node name="Player1" parent="." unique_id=2145816245 instance=ExtResource("3_mqyi5")]
+position = Vector2(150, 437)
