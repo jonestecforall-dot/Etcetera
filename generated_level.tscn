@@ -1,10 +1,10 @@
-[gd_scene format=3 uid="uid://cmljlxv324jkd"]
+[gd_scene format=3 uid="uid://7lko4sk5j3a7"]
 
-[ext_resource type="Texture2D" uid="uid://dmpr5a72u343s" path="res://World/Berie's_Adventure_Seaside_Asset_Pack_Free/Berie's_Adventure_Seaside_Asset_Pack_Free/PNG/tilemap.png" id="1_dmjml"]
-[ext_resource type="PackedScene" uid="uid://b3xruhg3p2an6" path="res://Scenes/player_1.tscn" id="2_xi86e"]
+[ext_resource type="Texture2D" uid="uid://dmpr5a72u343s" path="res://World/Berie's_Adventure_Seaside_Asset_Pack_Free/Berie's_Adventure_Seaside_Asset_Pack_Free/PNG/tilemap.png" id="1_yptkh"]
+[ext_resource type="PackedScene" uid="uid://b3xruhg3p2an6" path="res://Scenes/player_1.tscn" id="2_u7t2e"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_214o7"]
-atlas = ExtResource("1_dmjml")
+atlas = ExtResource("1_yptkh")
 region = Rect2(0, 2, 94, 92)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_xi86e"]
@@ -26,7 +26,7 @@ size = Vector2(94, 92)
 size = Vector2(94, 92)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_4nl4c"]
-atlas = ExtResource("1_dmjml")
+atlas = ExtResource("1_yptkh")
 region = Rect2(130, 1, 28, 91)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_fivhk"]
@@ -51,7 +51,7 @@ size = Vector2(28, 91)
 size = Vector2(28, 91)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_0mxlc"]
-atlas = ExtResource("1_dmjml")
+atlas = ExtResource("1_yptkh")
 region = Rect2(2, 130, 91, 27)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_x7mce"]
@@ -572,5 +572,5 @@ centered = false
 [node name="CollisionShape2D" type="CollisionShape2D" parent="CollisionBody_40_16" unique_id=1122038448]
 shape = SubResource("RectangleShape2D_tnjqa")
 
-[node name="Player1" parent="." unique_id=2145816245 instance=ExtResource("2_xi86e")]
-position = Vector2(570, -120)
+[node name="Player1" parent="." unique_id=2145816245 instance=ExtResource("2_u7t2e")]
+position = Vector2(345, 10)

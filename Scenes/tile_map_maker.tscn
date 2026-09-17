@@ -4,19 +4,11 @@
 [ext_resource type="Script" uid="uid://cpysbhfjkcwwv" path="res://Scripts/build_ui.gd" id="2_fa285"]
 [ext_resource type="Texture2D" uid="uid://dmpr5a72u343s" path="res://World/Berie's_Adventure_Seaside_Asset_Pack_Free/Berie's_Adventure_Seaside_Asset_Pack_Free/PNG/tilemap.png" id="2_i3ic6"]
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_214o7"]
+[sub_resource type="AtlasTexture" id="AtlasTexture_rv1xx"]
 atlas = ExtResource("2_i3ic6")
-region = Rect2(0, 2, 94, 92)
+region = Rect2(2, 1, 95, 94)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_4nl4c"]
-atlas = ExtResource("2_i3ic6")
-region = Rect2(130, 1, 28, 91)
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_0mxlc"]
-atlas = ExtResource("2_i3ic6")
-region = Rect2(2, 130, 91, 27)
-
-[node name="TileMapMaker" type="Control" unique_id=711328955 node_paths=PackedStringArray("ui_canvas_layer")]
+[node name="TileMapMaker" type="Control" unique_id=711328955 node_paths=PackedStringArray("spawn_point", "ui_canvas_layer")]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -24,11 +16,12 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_oldgq")
-tile_textures = Array[Texture2D]([SubResource("AtlasTexture_214o7"), SubResource("AtlasTexture_4nl4c"), SubResource("AtlasTexture_0mxlc")])
-tile_names = Array[String](["MainPlatform1", "MainPlatform2", "MainPlatform3"])
-tile_collisions = Array[bool]([true, true, true])
+tile_textures = Array[Texture2D]([SubResource("AtlasTexture_rv1xx")])
+tile_names = Array[String](["ground1"])
+tile_collisions = Array[bool]([true])
 max_map_width = 500
 max_map_height = 500
+spawn_point = NodePath("Node2D")
 ui_canvas_layer = NodePath("BuildUI")
 
 [node name="TextureRect" type="TextureRect" parent="." unique_id=852140806]
@@ -38,3 +31,6 @@ offset_bottom = 40.0
 
 [node name="BuildUI" type="CanvasLayer" parent="." unique_id=1833296008]
 script = ExtResource("2_fa285")
+
+[node name="Node2D" type="Node2D" parent="." unique_id=1928821093]
+position = Vector2(153, -42)

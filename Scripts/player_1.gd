@@ -5,9 +5,14 @@ enum MovementMode { SIDE_SCROLLER, TOP_DOWN }
 # --- Wall Slide / Wall Jump State ---
 var is_wall_sliding : bool = false
 var wall_normal : Vector2 = Vector2.ZERO
-var wall_jump_force_x : float = 250.0  # Sideways push
-var wall_slide_gravity : float = 100.0 # Slower fall when sliding
+var wall_jump_force_x : float = 250.0
+var wall_slide_gravity : float = 100.0
 @export var movement_mode: MovementMode = MovementMode.SIDE_SCROLLER
+
+# --- TEXTURES ---
+@export_group("Textures")
+@export var textures: Array[Texture2D] = []
+@export var texture_position: Node2D
 
 # --- JUMPING EXPORTS ---
 @export_group("Jumping")
@@ -16,7 +21,7 @@ var wall_slide_gravity : float = 100.0 # Slower fall when sliding
 @export var jump_smoothing: float = 0.8
 @export var coyote_time: float = 0.1
 @export var jump_buffer: float = 0.1
-@export var fall_multiplier: float = 1.5  # NEW: Higher = fall faster, lower = floatier
+@export var fall_multiplier: float = 1.5
 
 # --- SHOOTING EXPORTS ---
 @export_group("Shooting")
@@ -71,27 +76,34 @@ var mobile_ui : CanvasLayer
 # --- Child Node Container ---
 var logic_nodes : Array = []
 
+# --- Spawned Texture Sprites ---
+var spawned_textures : Array[Sprite2D] = []
+
+# --- Cached raw X of texture_position as placed in editor ---
+var texture_position_base_x : float = 0.0
+
 func _ready() -> void:
 	current_health = max_health
 	_resolve_nodes()
+	_spawn_textures()
 	
-	# TURN ON THE CAMERA
+	# Cache the RAW X (no abs), so the editor placement = facing-right position
+	if is_instance_valid(texture_position):
+		texture_position_base_x = texture_position.position.x
+	
 	if camera:
 		camera.make_current()
 	else:
 		print("Warning: Player Camera node path not set!")
 	
-	# Set up audio player
 	if audio_player and death_sound:
 		audio_player.stream = death_sound
 	
-	# Hook up hurtbox
 	if collision_shape:
 		var parent = collision_shape.get_parent()
 		if parent is Area2D:
 			parent.connect("body_entered", _on_hurtbox_body_entered)
 
-	# CONNECT TO MOBILE UI
 	if ui_node_path:
 		mobile_ui = get_node(ui_node_path)
 		if mobile_ui:
@@ -100,13 +112,39 @@ func _ready() -> void:
 			mobile_ui.ui_jump_pressed.connect(_on_ui_jump)
 			mobile_ui.ui_rage_pressed.connect(_on_ui_rage)
 
-	# Find Child Logic Nodes
 	_find_logic_nodes()
-
-	# Initialize Child Logic Nodes
 	for logic in logic_nodes:
 		if logic.has_method("initialize"):
 			logic.initialize(self, sprite, audio_player)
+
+func _spawn_textures() -> void:
+	if textures.is_empty():
+		print("Warning: No textures assigned!")
+		return
+	if not is_instance_valid(texture_position):
+		print("Warning: texture_position (Node2D) not assigned!")
+		return
+
+	for tex in textures:
+		if tex == null:
+			continue
+		var spr := Sprite2D.new()
+		spr.texture = tex
+		spr.z_index = z_index
+		spr.z_as_relative = z_as_relative
+		texture_position.add_child(spr)
+		spr.position = Vector2.ZERO
+		spawned_textures.append(spr)
+
+func _update_texture_flip() -> void:
+	if not is_instance_valid(texture_position):
+		return
+	# Facing right  -> keep as placed (-17 = behind)
+	# Facing left   -> mirror to +17 (behind on the other side)
+	if facing_direction == Vector2.LEFT:
+		texture_position.position.x = -texture_position_base_x
+	else:
+		texture_position.position.x = texture_position_base_x
 
 func _resolve_nodes() -> void:
 	if camera_node_path: camera = get_node(camera_node_path)
@@ -122,7 +160,6 @@ func _find_logic_nodes() -> void:
 func play_sound(sound_type: String) -> void:
 	if not audio_player:
 		return
-		
 	match sound_type:
 		"shoot":
 			if shoot_sound:
@@ -142,7 +179,6 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector2.ZERO
 		return
 
-	# --- 1. GATHER INPUT FIRST ---
 	var direction = ui_input_direction
 	if direction == Vector2.ZERO: 
 		direction.x = Input.get_axis("ui_left", "ui_right")
@@ -154,41 +190,34 @@ func _physics_process(delta: float) -> void:
 		MovementMode.TOP_DOWN:
 			pass
 
-	# --- 2. APPLY GRAVITY & WALL SLIDE LOGIC ---
 	if movement_mode == MovementMode.SIDE_SCROLLER:
 		is_wall_sliding = false
 		
-		# Check for wall sliding (only if not on floor, and pressing into the wall)
 		if not is_on_floor() and is_on_wall() and direction.x != 0:
-			# Check if we are pushing into the wall
 			var wall_normal = get_wall_normal()
 			if sign(direction.x) == -sign(wall_normal.x):
 				is_wall_sliding = true
 				wall_normal = get_wall_normal()
 		
 		if is_wall_sliding:
-			# Slow fall down the wall
 			if velocity.y > 0:
 				velocity.y = min(velocity.y, wall_slide_gravity)
 			else:
 				velocity.y += gravity * delta
 		else:
-			# Normal gravity
 			if velocity.y > 0:
 				velocity.y += gravity * fall_multiplier * delta
 			else:
 				velocity.y += gravity * delta
 		
-		# Update coyote time
 		if is_on_floor():
 			coyote_timer = coyote_time
 		else:
 			coyote_timer -= delta
 		
-		# Update jump buffer
 		jump_buffer_timer -= delta
 
-	# --- 3. UPDATE FACING DIRECTION ---
+	# --- UPDATE FACING DIRECTION ---
 	if direction != Vector2.ZERO:
 		last_direction = direction.normalized()
 		
@@ -200,27 +229,26 @@ func _physics_process(delta: float) -> void:
 			sprite.flip_h = false
 			facing_direction = Vector2.RIGHT
 
+	# Swap the backpack to the trailing side
+	_update_texture_flip()
+
 	direction = direction.normalized()
 
-	# --- 4. APPLY HORIZONTAL MOVEMENT ---
 	if movement_mode == MovementMode.SIDE_SCROLLER:
 		velocity.x = direction.x * 300.0
 	else:
 		velocity = direction * 300.0
 
-	# --- 5. HANDLE JUMPS (Wall Jump vs Normal) ---
 	if jump_buffer_timer > 0:
 		if is_wall_sliding or is_on_wall():
-			# WALL JUMP! (Snappy Mario style)
 			var wall_dir = get_wall_normal()
 			velocity.x = wall_dir.x * wall_jump_force_x
-			velocity.y = jump_force * 0.85 # Slightly weaker vertical jump
+			velocity.y = jump_force * 0.85
 			is_jumping = true
 			coyote_timer = 0
 			jump_buffer_timer = 0
 			play_sound("jump")
 			
-			# Force the sprite to face the direction we're jumping
 			if is_instance_valid(sprite):
 				if wall_dir.x > 0:
 					sprite.flip_h = false
@@ -233,10 +261,8 @@ func _physics_process(delta: float) -> void:
 				sprite.update_visual_state("jumping")
 				
 		elif coyote_timer > 0:
-			# NORMAL JUMP
 			_do_jump()
 
-	# --- 6. UPDATE ANIMATION ---
 	if is_instance_valid(sprite):
 		if sprite.has_method("update_visual_state"):
 			if movement_mode == MovementMode.SIDE_SCROLLER and not is_on_floor():
@@ -248,16 +274,15 @@ func _physics_process(delta: float) -> void:
 				is_moving = false
 				sprite.update_visual_state("idle")
 
-	# Call child logic
 	for logic in logic_nodes:
 		if logic.has_method("update_logic"):
 			logic.update_logic(delta)
 			
 	move_and_slide()
 	
-	# Check if we just landed
 	if is_on_floor() and is_jumping:
 		is_jumping = false
+
 func _do_jump() -> void:
 	velocity.y = jump_force
 	is_jumping = true
@@ -295,46 +320,30 @@ func shoot() -> void:
 		return
 	
 	can_shoot = false
-	
-	# Calculate shoot direction ONCE
 	var shoot_direction = _get_shoot_direction()
 	
-	# Create bullet
 	var bullet: Node2D
-	
 	if bullet_scene:
 		bullet = bullet_scene.instantiate()
 	else:
 		bullet = _create_default_bullet()
 	
 	if bullet:
-		# Calculate spawn position
 		var spawn_position = global_position + (shoot_direction * bullet_spawn_distance)
 		bullet.global_position = spawn_position
 		
-		# Set bullet properties ONCE
 		if bullet.has_method("setup"):
 			bullet.setup(shoot_direction, bullet_damage, self)
 		else:
-			if bullet.has_method("set_direction"):
-				bullet.set_direction(shoot_direction)
-			if bullet.has_method("set_speed"):
-				bullet.set_speed(bullet_speed)
-			if bullet.has_method("set_damage"):
-				bullet.set_damage(bullet_damage)
-			if bullet.has_method("set_shooter"):
-				bullet.set_shooter(self)
+			if bullet.has_method("set_direction"): bullet.set_direction(shoot_direction)
+			if bullet.has_method("set_speed"): bullet.set_speed(bullet_speed)
+			if bullet.has_method("set_damage"): bullet.set_damage(bullet_damage)
+			if bullet.has_method("set_shooter"): bullet.set_shooter(self)
 		
-		# Add to scene AFTER setting position
 		get_tree().current_scene.add_child(bullet)
-		
-		# Force the position again after adding to scene tree
 		bullet.global_position = spawn_position
 	
-	# Play sound
 	play_sound("shoot")
-	
-	# Reset fire rate
 	await get_tree().create_timer(fire_rate).timeout
 	can_shoot = true
 
@@ -355,14 +364,12 @@ func _create_default_bullet() -> Area2D:
 	bullet.collision_layer = 2
 	bullet.collision_mask = 1 | 4
 	
-	# Add collision shape
 	var collision = CollisionShape2D.new()
 	var shape = CircleShape2D.new()
 	shape.radius = 4.0
 	collision.shape = shape
 	bullet.add_child(collision)
 	
-	# Add sprite
 	var bullet_sprite = Sprite2D.new()
 	if bullet_texture:
 		bullet_sprite.texture = bullet_texture
@@ -370,7 +377,6 @@ func _create_default_bullet() -> Area2D:
 		if texture_size.x > 0 and texture_size.y > 0:
 			bullet_sprite.scale = Vector2(16.0 / texture_size.x, 16.0 / texture_size.y)
 	else:
-		# === FIXED: GradientTexture2D error here ===
 		var gradient = Gradient.new()
 		gradient.set_color(0, Color.YELLOW)
 		gradient.set_color(1, Color.ORANGE)
@@ -378,12 +384,11 @@ func _create_default_bullet() -> Area2D:
 		var placeholder = GradientTexture2D.new()
 		placeholder.width = 8
 		placeholder.height = 8
-		placeholder.gradient = gradient # <--- This is the fix
+		placeholder.gradient = gradient
 		bullet_sprite.texture = placeholder
 	
 	bullet.add_child(bullet_sprite)
 	
-	# Add bullet script
 	var bullet_script = GDScript.new()
 	bullet_script.source_code = """
 extends Area2D
@@ -409,7 +414,6 @@ func _physics_process(delta):
 func _on_body_entered(body):
 	if body == shooter:
 		return
-		
 	if body.is_in_group("enemies"):
 		body.take_hit("bullet", global_position)
 		queue_free()
@@ -419,7 +423,6 @@ func _on_body_entered(body):
 func _on_area_entered(area):
 	if area == shooter:
 		return
-	
 	if area.is_in_group("enemies"):
 		area.take_hit("bullet", global_position)
 		queue_free()
@@ -427,7 +430,6 @@ func _on_area_entered(area):
 	bullet_script.reload()
 	bullet.set_script(bullet_script)
 	
-	# Set initial properties ONCE
 	var shoot_dir = _get_shoot_direction()
 	bullet.set("direction", shoot_dir.normalized())
 	bullet.set("speed", bullet_speed)

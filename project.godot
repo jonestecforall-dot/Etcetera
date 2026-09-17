@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="DiscordGameHelp"
-run/main_scene="uid://cjx1sbxoy6s84"
+run/main_scene="uid://cbdil0e8m71y6"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
 

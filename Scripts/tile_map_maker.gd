@@ -6,7 +6,7 @@ extends Control
 @export var tile_textures: Array[Texture2D] = []
 @export var tile_names: Array[String] = []
 @export var tile_collisions: Array[bool] = []
-@export var tile_z_indices: Array[int] = []  # Draw Order per Texture
+@export var tile_z_indices: Array[int] = []
 
 # ==========================================
 # VIEW SETTINGS
@@ -14,10 +14,26 @@ extends Control
 @export var max_map_width: int = 100
 @export var max_map_height: int = 100
 @export var joystick_sensitivity: float = 5.0
-@export var save_folder: String = "res://saved_worlds/"  # Dedicated folder for saves
+@export var save_folder: String = "user://saved_worlds/"
 
 # ==========================================
-# UI CANVAS LAYER - EXPORTABLE!
+# SPAWN POINT
+# ==========================================
+@export_group("Spawn Point")
+## Drag a Marker2D (or any Node2D) here. Its position is saved into every level
+## as a "PlayerSpawn" node, which the MainMenu autoload uses to place the player.
+@export var spawn_point: Node2D
+
+# ==========================================
+# DEATH PLANE SETTINGS
+# ==========================================
+@export_group("Death Plane")
+@export var death_plane_margin: float = 50.0
+@export var player_group_name: String = "player"
+@export var debug_death_plane: bool = true
+
+# ==========================================
+# UI CANVAS LAYER
 # ==========================================
 @export var ui_canvas_layer: CanvasLayer
 
@@ -32,39 +48,41 @@ var camera: Camera2D
 var tile_container: Node2D
 var placed_tiles: Dictionary = {}
 var preview_sprite: Sprite2D
-var last_placed_position: Vector2 = Vector2.ZERO  # Track last placed position
-var current_save_file: String = ""  # Track current loaded file
+var last_placed_position: Vector2 = Vector2.ZERO
+var current_save_file: String = ""
 
-# Save dialog references
+var death_plane_y: float = INF
+var player_spawn_points: Dictionary = {}
+
 var save_dialog: Window
 var save_name_input: LineEdit
 var save_new_button: Button
 var save_over_button: Button
+var delete_selected_button: Button
+var delete_all_saves_button: Button
 var save_list_container: VBoxContainer
 var load_button: Button
 
+# Confirmation popup for delete-all
+var confirm_dialog: ConfirmationDialog
+
 func _ready() -> void:
-	# Ensure save folder exists
 	_ensure_save_folder()
 	
-	# Setup Camera
 	camera = Camera2D.new()
 	camera.zoom = Vector2(1, 1)
 	add_child(camera)
 	camera.make_current()
 	
-	# Setup container for placed tiles
 	tile_container = Node2D.new()
 	add_child(tile_container)
 	
-	# Setup preview using Sprite2D
 	preview_sprite = Sprite2D.new()
 	preview_sprite.visible = false
 	preview_sprite.centered = false
 	preview_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	tile_container.add_child(preview_sprite)
 	
-	# Fill arrays if empty
 	if tile_names.size() < tile_textures.size():
 		for i in range(tile_textures.size()):
 			tile_names.append("Tile " + str(i + 1))
@@ -80,35 +98,88 @@ func _ready() -> void:
 	else:
 		print("⚠️ No UI CanvasLayer assigned!")
 
-	# Don't auto-load, just show empty workspace
 	print("🆕 Ready to create or load a world!")
 	_create_save_dialog()
+	_create_confirm_dialog()
+	_capture_initial_player_spawns()
 
-# ==========================================
-# ENSURE SAVE FOLDER EXISTS
-# ==========================================
+func _capture_initial_player_spawns() -> void:
+	for p in get_tree().get_nodes_in_group(player_group_name):
+		if is_instance_valid(p):
+			player_spawn_points[p] = p.global_position
+
+func _process(_delta: float) -> void:
+	for p in get_tree().get_nodes_in_group(player_group_name):
+		if not is_instance_valid(p):
+			continue
+		if not player_spawn_points.has(p):
+			player_spawn_points[p] = p.global_position
+		if p.global_position.y > death_plane_y:
+			respawn_player(p)
+
+func respawn_player(player: Node) -> void:
+	if not is_instance_valid(player):
+		return
+	var spawn_pos: Vector2 = player_spawn_points.get(player, Vector2.ZERO)
+	player.global_position = spawn_pos
+	if player is CharacterBody2D:
+		player.velocity = Vector2.ZERO
+	if player.has_method("on_respawn"):
+		player.on_respawn()
+	if debug_death_plane:
+		print("☠️ Player respawned at ", spawn_pos, " (death plane y = ", death_plane_y, ")")
+
+func set_respawn_point(player: Node, pos: Vector2) -> void:
+	player_spawn_points[player] = pos
+
+func get_death_plane_y() -> float:
+	return death_plane_y
+
+func _recalculate_death_plane() -> void:
+	var lowest_y: float = -INF
+	var found_collision_tile: bool = false
+	
+	for coord in placed_tiles.keys():
+		var data = placed_tiles[coord]
+		if data["collision"] == null:
+			continue
+		var tex_index: int = data["texture_index"]
+		var tex_size := get_texture_size_by_index(tex_index)
+		var bottom_y = (coord.y * tex_size.y) + tex_size.y
+		if bottom_y > lowest_y:
+			lowest_y = bottom_y
+			found_collision_tile = true
+	
+	var new_death_y: float
+	if not found_collision_tile:
+		new_death_y = INF
+	else:
+		new_death_y = lowest_y + death_plane_margin
+	
+	if new_death_y != death_plane_y:
+		death_plane_y = new_death_y
+		if debug_death_plane:
+			print("📉 Death plane recalculated: y = ", death_plane_y)
+
 func _ensure_save_folder() -> void:
-	var dir = DirAccess.open("res://")
+	var dir = DirAccess.open("user://")
 	if not dir.dir_exists(save_folder):
 		dir.make_dir(save_folder)
 		print("📁 Created save folder: ", save_folder)
 
 # ==========================================
-# SAVE DIALOG CREATION
+# SAVE DIALOG
 # ==========================================
-
 func _create_save_dialog() -> void:
-	# Create main window
 	save_dialog = Window.new()
 	save_dialog.title = "Save/Load World"
-	save_dialog.size = Vector2(450, 350)
+	save_dialog.size = Vector2(500, 420)
 	save_dialog.visible = false
 	save_dialog.exclusive = true
-	save_dialog.min_size = Vector2(400, 300)
-	save_dialog.close_requested.connect(_on_save_dialog_closed)  # Add this line
+	save_dialog.min_size = Vector2(450, 380)
+	save_dialog.close_requested.connect(_on_save_dialog_closed)
 	add_child(save_dialog)
 	
-	# Main container
 	var main_vbox = VBoxContainer.new()
 	main_vbox.anchor_right = 1.0
 	main_vbox.anchor_bottom = 1.0
@@ -118,20 +189,17 @@ func _create_save_dialog() -> void:
 	main_vbox.offset_top = 10
 	save_dialog.add_child(main_vbox)
 	
-	# Name input section
 	var name_label = Label.new()
 	name_label.text = "Level Name:"
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	main_vbox.add_child(name_label)
 	
 	save_name_input = LineEdit.new()
 	save_name_input.placeholder_text = "Enter level name..."
 	main_vbox.add_child(save_name_input)
 	
-	# Spacer
 	main_vbox.add_child(HSeparator.new())
 	
-	# Buttons section
+	# --- Row 1: Save/Load buttons ---
 	var button_hbox = HBoxContainer.new()
 	button_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	main_vbox.add_child(button_hbox)
@@ -154,13 +222,27 @@ func _create_save_dialog() -> void:
 	load_button.pressed.connect(_on_load_pressed)
 	button_hbox.add_child(load_button)
 	
-	# Spacer
+	# --- Row 2: Delete selected / Delete all ---
+	var delete_hbox = HBoxContainer.new()
+	delete_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	main_vbox.add_child(delete_hbox)
+	
+	delete_selected_button = Button.new()
+	delete_selected_button.text = "🗑️ Delete Selected"
+	delete_selected_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	delete_selected_button.pressed.connect(_on_delete_selected_pressed)
+	delete_hbox.add_child(delete_selected_button)
+	
+	delete_all_saves_button = Button.new()
+	delete_all_saves_button.text = "🗑️ Delete All"
+	delete_all_saves_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	delete_all_saves_button.pressed.connect(_on_delete_all_saves_pressed)
+	delete_hbox.add_child(delete_all_saves_button)
+	
 	main_vbox.add_child(HSeparator.new())
 	
-	# Available saves section
 	var saves_label = Label.new()
 	saves_label.text = "Available Saves:"
-	saves_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	main_vbox.add_child(saves_label)
 	
 	var scroll_container = ScrollContainer.new()
@@ -171,15 +253,24 @@ func _create_save_dialog() -> void:
 	save_list_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll_container.add_child(save_list_container)
 	
-	# Refresh the list
 	_refresh_save_list()
 
+# ==========================================
+# CONFIRMATION DIALOG (for Delete All)
+# ==========================================
+func _create_confirm_dialog() -> void:
+	confirm_dialog = ConfirmationDialog.new()
+	confirm_dialog.title = "Are you sure?"
+	confirm_dialog.dialog_text = "This will permanently delete ALL saved worlds. Continue?"
+	confirm_dialog.ok_button_text = "Delete All"
+	confirm_dialog.cancel_button_text = "Cancel"
+	confirm_dialog.confirmed.connect(_on_delete_all_saves_confirmed)
+	add_child(confirm_dialog)
+
 func _refresh_save_list() -> void:
-	# Clear existing list
 	for child in save_list_container.get_children():
 		child.queue_free()
 	
-	# Get all .tscn files in the save folder
 	var saves = []
 	var dir = DirAccess.open(save_folder)
 	if dir:
@@ -199,16 +290,26 @@ func _refresh_save_list() -> void:
 		save_list_container.add_child(no_saves)
 	else:
 		for save_file in saves:
+			# Row = [Save Button] [Delete Button]
+			var row = HBoxContainer.new()
+			row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			save_list_container.add_child(row)
+			
 			var save_button = Button.new()
 			save_button.text = save_file
 			save_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			save_button.set_meta("filename", save_file)
 			save_button.pressed.connect(_on_save_selected.bind(save_button))
-			save_list_container.add_child(save_button)
+			row.add_child(save_button)
+			
+			var row_delete = Button.new()
+			row_delete.text = "🗑️"
+			row_delete.custom_minimum_size = Vector2(40, 0)
+			row_delete.tooltip_text = "Delete this save"
+			row_delete.set_meta("filename", save_file)
+			row_delete.pressed.connect(_on_delete_save_button_pressed.bind(row_delete))
+			row.add_child(row_delete)
 
-# ==========================================
-# SAVE/LIST BUTTON FUNCTIONS
-# ==========================================
 func _on_save_selected(button: Button) -> void:
 	var filename = button.get_meta("filename")
 	if filename:
@@ -217,16 +318,17 @@ func _on_save_selected(button: Button) -> void:
 func _on_save_dialog_closed() -> void:
 	save_dialog.visible = false
 
+# ==========================================
+# SAVE / LOAD HANDLERS
+# ==========================================
 func _on_save_new_pressed() -> void:
 	var level_name = save_name_input.text.strip_edges()
 	if level_name.is_empty():
-		level_name = "new_level_" + str(Time.get_unix_time_from_system())
+		level_name = "new_level_" + str(int(Time.get_unix_time_from_system()))
 	
-	# Make sure it ends with .tscn
 	if not level_name.ends_with(".tscn"):
 		level_name += ".tscn"
 	
-	# Save with the new name in the save folder
 	var full_path = save_folder + level_name
 	_save_scene(full_path)
 	current_save_file = full_path
@@ -240,11 +342,9 @@ func _on_save_over_pressed() -> void:
 		print("⚠️ No level selected to save over")
 		return
 	
-	# Make sure it ends with .tscn
 	if not level_name.ends_with(".tscn"):
 		level_name += ".tscn"
 	
-	# Save over the selected file
 	var full_path = save_folder + level_name
 	_save_scene(full_path)
 	current_save_file = full_path
@@ -258,7 +358,6 @@ func _on_load_pressed() -> void:
 		print("⚠️ No level selected to load")
 		return
 	
-	# Make sure it ends with .tscn
 	if not level_name.ends_with(".tscn"):
 		level_name += ".tscn"
 	
@@ -268,7 +367,75 @@ func _on_load_pressed() -> void:
 	print("🔄 Loaded world: ", full_path)
 
 # ==========================================
-# TEXTURE SIZE HELPER
+# DELETE HANDLERS
+# ==========================================
+func _on_delete_selected_pressed() -> void:
+	var level_name = save_name_input.text.strip_edges()
+	if level_name.is_empty():
+		print("⚠️ No level selected to delete")
+		return
+	
+	if not level_name.ends_with(".tscn"):
+		level_name += ".tscn"
+	
+	var full_path = save_folder + level_name
+	_delete_level_data(full_path)
+	
+	if current_save_file == full_path:
+		current_save_file = ""
+	
+	save_name_input.text = ""
+	_refresh_save_list()
+	print("🗑️ Deleted: ", full_path)
+
+func _on_delete_save_button_pressed(button: Button) -> void:
+	var filename = button.get_meta("filename")
+	if not filename:
+		return
+	
+	var full_path = save_folder + filename
+	_delete_level_data(full_path)
+	
+	if current_save_file == full_path:
+		current_save_file = ""
+	
+	var current_input = save_name_input.text.strip_edges()
+	if current_input == filename or current_input == filename.replace(".tscn", ""):
+		save_name_input.text = ""
+	
+	_refresh_save_list()
+	print("🗑️ Deleted: ", full_path)
+
+func _on_delete_all_saves_pressed() -> void:
+	if confirm_dialog:
+		confirm_dialog.popup_centered()
+
+func _on_delete_all_saves_confirmed() -> void:
+	var dir = DirAccess.open(save_folder)
+	if dir == null:
+		print("❌ Could not open save folder: ", save_folder)
+		return
+	
+	var deleted_count = 0
+	dir.list_dir_begin()
+	var file = dir.get_next()
+	while file != "":
+		if file.ends_with(".tscn"):
+			var err = dir.remove(file)
+			if err == OK:
+				deleted_count += 1
+			else:
+				print("❌ Failed to delete ", file, " (error ", err, ")")
+		file = dir.get_next()
+	dir.list_dir_end()
+	
+	current_save_file = ""
+	save_name_input.text = ""
+	_refresh_save_list()
+	print("🗑️ Deleted all saves (", deleted_count, " files).")
+
+# ==========================================
+# TEXTURE SIZE HELPERS
 # ==========================================
 func get_current_texture_size() -> Vector2:
 	if tile_textures.is_empty() or current_tile_index >= tile_textures.size():
@@ -312,12 +479,12 @@ func _connect_ui_signals() -> void:
 		print("✅ BuildUI connected!")
 	else:
 		print("⚠️ BuildUI not found!")
+
 func _show_save_dialog() -> void:
 	if save_dialog:
 		save_dialog.visible = true
 		save_dialog.popup_centered()
 		save_name_input.text = ""
-		# Removed grab_focus() so Android keyboard doesn't pop up automatically
 		_refresh_save_list()
 
 func _on_tile_selected(index: int) -> void:
@@ -333,7 +500,7 @@ func _on_joystick_released() -> void:
 	pass
 
 # ==========================================
-# INPUT HANDLING
+# INPUT
 # ==========================================
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
@@ -400,7 +567,7 @@ func _update_preview_sprite(grid_pos: Vector2) -> void:
 	preview_sprite.z_index = get_z_index_by_index(current_tile_index)
 
 # ==========================================
-# PLACE TILE
+# PLACE / DELETE TILES
 # ==========================================
 func _place_tile(world_pos: Vector2) -> void:
 	var grid_pos = _snap_to_grid(world_pos)
@@ -461,10 +628,9 @@ func _place_tile(world_pos: Vector2) -> void:
 	last_placed_position = grid_pos
 	if ui_canvas_layer and ui_canvas_layer.has_method("update_last_position"):
 		ui_canvas_layer.update_last_position(grid_pos)
+	
+	_recalculate_death_plane()
 
-# ==========================================
-# DELETE TILE
-# ==========================================
 func _delete_tile(world_pos: Vector2) -> void:
 	var tex_size = get_current_texture_size()
 	var grid_pos = _snap_to_grid(world_pos)
@@ -482,10 +648,8 @@ func _delete_tile(world_pos: Vector2) -> void:
 			data["collision"].queue_free()
 			
 		placed_tiles.erase(tile_coord)
+		_recalculate_death_plane()
 
-# ==========================================
-# DELETE ALL TILES
-# ==========================================
 func _delete_all_tiles() -> void:
 	for coord in placed_tiles.keys():
 		var data = placed_tiles[coord]
@@ -499,11 +663,9 @@ func _delete_all_tiles() -> void:
 	if ui_canvas_layer and ui_canvas_layer.has_method("clear_last_position"):
 		ui_canvas_layer.clear_last_position()
 	
+	_recalculate_death_plane()
 	print("🗑️ All tiles deleted!")
 
-# ==========================================
-# SNAP TO GRID
-# ==========================================
 func _snap_to_grid(world_pos: Vector2) -> Vector2:
 	var tex_size = get_current_texture_size()
 	return Vector2(
@@ -511,9 +673,6 @@ func _snap_to_grid(world_pos: Vector2) -> Vector2:
 		floor(world_pos.y / tex_size.y) * tex_size.y
 	)
 
-# ==========================================
-# UNDO LAST PLACE
-# ==========================================
 func _undo_last_place() -> void:
 	if placed_tiles.is_empty():
 		return
@@ -537,15 +696,138 @@ func _undo_last_place() -> void:
 		last_placed_position = Vector2.ZERO
 		if ui_canvas_layer and ui_canvas_layer.has_method("clear_last_position"):
 			ui_canvas_layer.clear_last_position()
+	
+	_recalculate_death_plane()
+
+# ==========================================
+# LEVEL RUNTIME SCRIPT
+# ==========================================
+const LEVEL_RUNTIME_SCRIPT_PATH := "user://saved_worlds/level_runtime.gd"
+
+func _write_level_runtime_script() -> void:
+	var code := """extends Node2D
+
+# Auto-generated runtime script for a saved level.
+# Handles the death plane and player respawning.
+
+@export var death_plane_margin: float = 50.0
+@export var player_group_name: String = "player"
+@export var debug_death_plane: bool = true
+
+var death_plane_y: float = INF
+var player_spawn_points: Dictionary = {}
+var _initial_spawns_captured: bool = false
+
+func _ready() -> void:
+	call_deferred("_deferred_setup")
+
+func _deferred_setup() -> void:
+	_recalculate_death_plane()
+	_capture_player_spawns()
+	_initial_spawns_captured = true
+	if debug_death_plane:
+		print("✅ Level ready | death plane y = ", death_plane_y, " | players: ", get_tree().get_nodes_in_group(player_group_name).size())
+
+func _capture_player_spawns() -> void:
+	for p in get_tree().get_nodes_in_group(player_group_name):
+		if is_instance_valid(p) and not player_spawn_points.has(p):
+			player_spawn_points[p] = p.global_position
+
+func _process(_delta: float) -> void:
+	if not _initial_spawns_captured:
+		return
+	
+	for p in get_tree().get_nodes_in_group(player_group_name):
+		if not is_instance_valid(p):
+			continue
+		if not player_spawn_points.has(p):
+			player_spawn_points[p] = p.global_position
+		if p.global_position.y > death_plane_y:
+			respawn_player(p)
+
+func _recalculate_death_plane() -> void:
+	var lowest_y: float = -INF
+	var found_collision: bool = false
+	
+	for child in get_children():
+		var bottom_y: float = -INF
+		if child is StaticBody2D:
+			var half_h: float = 0.0
+			for sub in child.get_children():
+				if sub is CollisionShape2D and sub.shape is RectangleShape2D:
+					half_h = sub.shape.size.y * 0.5
+					break
+			bottom_y = child.global_position.y + half_h
+		elif child is Sprite2D and child.texture:
+			continue
+		else:
+			continue
+		
+		if bottom_y > lowest_y:
+			lowest_y = bottom_y
+			found_collision = true
+	
+	if found_collision:
+		death_plane_y = lowest_y + death_plane_margin
+	else:
+		death_plane_y = INF
+
+func respawn_player(player: Node) -> void:
+	if not is_instance_valid(player):
+		return
+	var spawn_pos: Vector2 = player_spawn_points.get(player, Vector2.ZERO)
+	player.global_position = spawn_pos
+	if player is CharacterBody2D:
+		player.velocity = Vector2.ZERO
+	if player.has_method("on_respawn"):
+		player.on_respawn()
+	if debug_death_plane:
+		print("☠️ Player respawned at ", spawn_pos, " (death plane y = ", death_plane_y, ")")
+
+func set_respawn_point(player: Node, pos: Vector2) -> void:
+	player_spawn_points[player] = pos
+
+func get_death_plane_y() -> float:
+	return death_plane_y
+"""
+	
+	var file = FileAccess.open(LEVEL_RUNTIME_SCRIPT_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(code)
+		file.close()
+		ResourceLoader.load(LEVEL_RUNTIME_SCRIPT_PATH, "GDScript", ResourceLoader.CACHE_MODE_REPLACE)
 
 # ==========================================
 # SAVE SCENE
 # ==========================================
-func _save_scene(path: String) -> void:
+func _save_scene(path: String, delete_data: bool = false) -> void:
 	print("Saving Level Scene to: ", path)
+	
+	_write_level_runtime_script()
+	
+	if delete_data:
+		_delete_level_data(path)
+	
 	var root = Node2D.new()
 	root.name = "GeneratedLevel"
 	add_child(root)
+	
+	var runtime_script = load(LEVEL_RUNTIME_SCRIPT_PATH)
+	if runtime_script:
+		root.set_script(runtime_script)
+		root.set("death_plane_margin", death_plane_margin)
+		root.set("player_group_name", player_group_name)
+		root.set("debug_death_plane", debug_death_plane)
+	
+	# --- Save the spawn point as "PlayerSpawn" inside the level ---
+	if is_instance_valid(spawn_point):
+		var spawn_marker := Marker2D.new()
+		spawn_marker.name = "PlayerSpawn"
+		spawn_marker.position = spawn_point.global_position
+		root.add_child(spawn_marker)
+		print("📍 Saved PlayerSpawn at: ", spawn_marker.position)
+	else:
+		print("⚠️ No spawn_point assigned — level will have no PlayerSpawn marker.")
 	
 	for coord in placed_tiles.keys():
 		var data = placed_tiles[coord]
@@ -605,6 +887,8 @@ func _save_scene(path: String) -> void:
 		if save_error == OK:
 			print("✅ Level Saved to: ", path)
 			print("📊 Total tiles saved: ", placed_tiles.size())
+			if delete_data:
+				print("🗑️ Old data was deleted before saving.")
 		else:
 			print("❌ Failed to save file with error code: ", save_error)
 	else:
@@ -613,11 +897,33 @@ func _save_scene(path: String) -> void:
 	root.queue_free()
 
 # ==========================================
+# DELETE LEVEL DATA
+# ==========================================
+func _delete_level_data(path: String) -> void:
+	if path.is_empty():
+		print("⚠️ Delete skipped: empty path.")
+		return
+	
+	if not FileAccess.file_exists(path):
+		print("⚠️ Delete skipped: no file at ", path)
+		return
+	
+	var dir = DirAccess.open(save_folder)
+	if dir == null:
+		print("❌ Could not open save folder for delete: ", save_folder)
+		return
+	
+	var filename = path.get_file()
+	var err = dir.remove(filename)
+	if err == OK:
+		print("🗑️ Deleted level data: ", path)
+	else:
+		print("❌ Failed to delete file, error code: ", err)
+
+# ==========================================
 # LOAD WORLD
 # ==========================================
-
 func _load_world(path: String) -> void:
-	# Clear existing tiles first
 	_delete_all_tiles()
 	
 	if not FileAccess.file_exists(path):
@@ -634,24 +940,20 @@ func _load_world(path: String) -> void:
 	if loaded_level == null:
 		return
 		
-	# Add as child temporarily
 	add_child(loaded_level)
 	await get_tree().process_frame
 	
 	var max_pos = Vector2.ZERO
 	var has_tiles = false
 	
-	# Get all children from the loaded level
 	var children_to_process = loaded_level.get_children().duplicate()
 	
 	for child in children_to_process:
 		if child is StaticBody2D:
-			# This is a tile with collision
 			var body = child
 			var sprite = null
 			var collision_shape = null
 			
-			# Find sprite and collision shape
 			for sub_child in body.get_children():
 				if sub_child is Sprite2D:
 					sprite = sub_child
@@ -659,38 +961,30 @@ func _load_world(path: String) -> void:
 					collision_shape = sub_child
 					
 			if sprite and sprite.texture:
-				# Find the texture index
 				var found_index = tile_textures.find(sprite.texture)
 				if found_index == -1:
 					found_index = 0
 					
 				var tex_size = get_texture_size_by_index(found_index)
 				
-				# Calculate the grid position from the sprite's position
-				# The sprite is at local position (-tex_size/2) relative to body center
 				var grid_pos = body.position - (tex_size / 2.0)
 				var coord = Vector2i(
 					int(round(grid_pos.x / tex_size.x)),
 					int(round(grid_pos.y / tex_size.y))
 				)
 				
-				# Remove from loaded_level and add to tile_container
 				loaded_level.remove_child(body)
 				tile_container.add_child(body)
 				
-				# Set the body position to the center of the tile
 				body.position = grid_pos + (tex_size / 2.0)
 				body.z_index = get_z_index_by_index(found_index)
 				
-				# Ensure sprite is at correct local position
 				sprite.position = -tex_size / 2.0
 				sprite.z_index = 0
 				
-				# Ensure collision shape is at center
 				if collision_shape:
 					collision_shape.position = Vector2.ZERO
 				
-				# Store in dictionary
 				placed_tiles[coord] = {
 					"texture_index": found_index,
 					"visual": sprite,
@@ -702,7 +996,6 @@ func _load_world(path: String) -> void:
 				has_tiles = true
 				
 		elif child is Sprite2D:
-			# This is a tile without collision
 			var sprite = child
 			
 			if sprite.texture:
@@ -717,11 +1010,9 @@ func _load_world(path: String) -> void:
 					int(round(grid_pos.y / tex_size.y))
 				)
 				
-				# Remove from loaded_level and add to tile_container
 				loaded_level.remove_child(sprite)
 				tile_container.add_child(sprite)
 				
-				# Position the sprite correctly
 				sprite.position = grid_pos
 				sprite.z_index = get_z_index_by_index(found_index)
 				
@@ -735,10 +1026,8 @@ func _load_world(path: String) -> void:
 					max_pos = grid_pos
 				has_tiles = true
 	
-	# Remove the loaded level container
 	loaded_level.queue_free()
 	
-	# Update UI
 	if has_tiles:
 		last_placed_position = max_pos
 		if ui_canvas_layer and ui_canvas_layer.has_method("update_last_position"):
@@ -749,10 +1038,11 @@ func _load_world(path: String) -> void:
 			ui_canvas_layer.clear_last_position()
 	
 	current_save_file = path
+	_recalculate_death_plane()
 	print("✅ World loaded! Total tiles: ", placed_tiles.size())
 
 # ==========================================
-# UTILITY FUNCTIONS
+# UTILITIES
 # ==========================================
 func _set_owner_recursive(node: Node, owner: Node) -> void:
 	node.owner = owner

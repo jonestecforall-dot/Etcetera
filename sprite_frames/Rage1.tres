@@ -1,0 +1,81 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://AnimationsFolder/idle.png" id="1_268vw"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_6g3fq"]
+atlas = ExtResource("1_268vw")
+region = Rect2(0, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_lh47p"]
+atlas = ExtResource("1_268vw")
+region = Rect2(46, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ka0ld"]
+atlas = ExtResource("1_268vw")
+region = Rect2(92, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_txw6w"]
+atlas = ExtResource("1_268vw")
+region = Rect2(138, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_7vrb8"]
+atlas = ExtResource("1_268vw")
+region = Rect2(184, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ddfjs"]
+atlas = ExtResource("1_268vw")
+region = Rect2(230, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_a7wx1"]
+atlas = ExtResource("1_268vw")
+region = Rect2(276, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_52sjf"]
+atlas = ExtResource("1_268vw")
+region = Rect2(322, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_8snec"]
+atlas = ExtResource("1_268vw")
+region = Rect2(368, 0, 46, 55)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_sxo6x"]
+atlas = ExtResource("1_268vw")
+region = Rect2(414, 0, 46, 55)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_6g3fq")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_lh47p")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ka0ld")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_txw6w")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_7vrb8")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ddfjs")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_a7wx1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_52sjf")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_8snec")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_sxo6x")
+}],
+"loop": 1,
+"name": &"anim_0_0",
+"speed": 10.0
+}]

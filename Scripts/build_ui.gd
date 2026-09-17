@@ -21,6 +21,7 @@ signal delete_all_pressed
 signal joystick_dragged(offset: Vector2)
 signal joystick_released
 signal last_position_updated(position: Vector2)
+signal menu_pressed   # <-- NEW: emitted when the MENU button is tapped
 
 # ==========================================
 # UI ELEMENTS
@@ -109,6 +110,13 @@ func _build_ui_elements() -> void:
 	save_btn.text = "SAVE"
 	save_btn.pressed.connect(func(): save_pressed.emit())
 	action_row.add_child(save_btn)
+	
+	# --- MENU button: changes scene directly, no signal needed ---
+	var menu_btn = Button.new()
+	menu_btn.text = "MENU"
+	menu_btn.modulate = Color(0.6, 0.8, 1.0, 1)
+	menu_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://intro_menu.tscn"))
+	action_row.add_child(menu_btn)
 	
 	var info_container = HBoxContainer.new()
 	info_container.add_theme_constant_override("separation", 10)

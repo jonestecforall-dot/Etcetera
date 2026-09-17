@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://cbdil0e8m71y6"]
+
+[ext_resource type="Script" uid="uid://hyt4lra7c7pv" path="res://intro_menu.gd" id="1_62jdl"]
+[ext_resource type="PackedScene" uid="uid://b3xruhg3p2an6" path="res://Scenes/player_1.tscn" id="2_rv1xx"]
+
+[node name="IntroMenu" type="Control" unique_id=1427385801]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_62jdl")
+player_scene = ExtResource("2_rv1xx")
+editor_scene_path = "res://Scenes/tile_map_maker.tscn"

@@ -6,6 +6,10 @@
 [ext_resource type="Script" uid="uid://bs3l5dj5r5gko" path="res://Scripts/player_anim.gd" id="2_qh3su"]
 [ext_resource type="Texture2D" uid="uid://c2mqhca5r6vc3" path="res://World/Berie's_Adventure_Seaside_Asset_Pack_Free/Berie's_Adventure_Seaside_Asset_Pack_Free/PNG/vegetation_tree_palm5.png" id="6_i66ns"]
 
+[sub_resource type="AtlasTexture" id="AtlasTexture_xi86e"]
+atlas = ExtResource("6_i66ns")
+region = Rect2(16, 12, 63, 71)
+
 [sub_resource type="AtlasTexture" id="AtlasTexture_buxg0"]
 atlas = ExtResource("2_buxg0")
 region = Rect2(0, 0, 651, 776)
@@ -23,15 +27,17 @@ animations = [{
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_8rlr6"]
 
-[node name="Player1" type="CharacterBody2D" unique_id=2145816245]
+[node name="Player1" type="CharacterBody2D" unique_id=2145816245 node_paths=PackedStringArray("texture_position") groups=["player"]]
 script = ExtResource("1_squ5q")
+textures = Array[Texture2D]([SubResource("AtlasTexture_xi86e")])
+texture_position = NodePath("Node2D")
 camera_node_path = NodePath("Camera2D")
 collision_node_path = NodePath("CollisionShape2D")
-sprite_node_path = NodePath("PlayerAnim")
+sprite_node_path = NodePath("SpriteNode")
 audio_node_path = NodePath("AudioStreamPlayer2D")
 ui_node_path = NodePath("PlayerUI")
 
-[node name="PlayerAnim" type="AnimatedSprite2D" parent="." unique_id=1997119313]
+[node name="SpriteNode" type="AnimatedSprite2D" parent="." unique_id=1997119313]
 scale = Vector2(0.1, 0.1)
 script = ExtResource("2_qh3su")
 sprite_frames_data = SubResource("SpriteFrames_buxg0")
@@ -46,8 +52,7 @@ zoom = Vector2(1.5, 1.5)
 
 [node name="PlayerUI" type="CanvasLayer" parent="." unique_id=508205700]
 script = ExtResource("2_bxx23")
+menu_scene_path = "uid://cbdil0e8m71y6"
 
-[node name="TextureRect" type="TextureRect" parent="." unique_id=2008146664]
-offset_right = 40.0
-offset_bottom = 40.0
-texture = ExtResource("6_i66ns")
+[node name="Node2D" type="Node2D" parent="." unique_id=945623613]
+position = Vector2(-17, -14)

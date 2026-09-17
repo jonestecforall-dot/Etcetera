@@ -6,12 +6,15 @@ signal ui_attack_pressed
 signal ui_jump_pressed
 signal ui_rage_pressed
 
+# --- Exported Menu Scene Path ---
+@export_file("*.tscn") var menu_scene_path : String = "res://intro_menu.tscn"
+
 # --- Screen Size Detection ---
 var screen_size : Vector2
 
 # --- Joystick Variables ---
-var joystick_base : Control # Changed from Panel to Control for custom drawing
-var joystick_handle : Control # Changed from Panel to Control
+var joystick_base : Control
+var joystick_handle : Control
 var is_touching_joystick : bool = false
 var joystick_touch_index : int = -1
 var joystick_center : Vector2
@@ -22,30 +25,26 @@ var joystick_handle_radius : float = 30.0
 const COLOR_BASE = Color(1, 1, 1, 0.15)
 const COLOR_BASE_BORDER = Color(1, 1, 1, 0.3)
 const COLOR_HANDLE = Color(1, 1, 1, 0.6)
-const COLOR_ATTACK = Color(0.9, 0.2, 0.2, 0.7)  # Red
-const COLOR_JUMP = Color(0.2, 0.8, 0.2, 0.7)    # Green
-const COLOR_RAGE = Color(0.9, 0.8, 0.1, 0.7)    # Yellow
+const COLOR_ATTACK = Color(0.9, 0.2, 0.2, 0.7)
+const COLOR_JUMP = Color(0.2, 0.8, 0.2, 0.7)
+const COLOR_RAGE = Color(0.9, 0.8, 0.1, 0.7)
+const COLOR_MENU = Color(0.3, 0.5, 0.9, 0.85)
 
 func _ready() -> void:
-	# Get the actual viewport size (works on mobile and desktop)
 	screen_size = get_viewport().get_visible_rect().size
-	# Recalculate if screen resizes
 	get_viewport().size_changed.connect(_on_viewport_resized)
 	
 	_build_joystick()
 	_build_action_buttons()
+	_build_menu_button()
 
 func _on_viewport_resized() -> void:
 	screen_size = get_viewport().get_visible_rect().size
-	# Re-position UI elements on resize
 	if joystick_base and is_instance_valid(joystick_base):
 		joystick_base.position = Vector2(50, screen_size.y - (joystick_radius * 2) - 50)
-	# It's easier to just clear and rebuild buttons on resize, but for simplicity 
-	# we will just rely on anchors for the buttons below.
 
 # --- Build the Left Joystick ---
 func _build_joystick() -> void:
-	# The joystick base (custom drawn circle)
 	joystick_base = Control.new()
 	joystick_base.custom_minimum_size = Vector2(joystick_radius * 2, joystick_radius * 2)
 	joystick_base.position = Vector2(50, screen_size.y - (joystick_radius * 2) - 50)
@@ -54,7 +53,6 @@ func _build_joystick() -> void:
 	joystick_base.draw.connect(_draw_joystick_base)
 	add_child(joystick_base)
 	
-	# The joystick handle (custom drawn circle)
 	joystick_handle = Control.new()
 	joystick_handle.custom_minimum_size = Vector2(joystick_handle_radius * 2, joystick_handle_radius * 2)
 	joystick_handle.position = Vector2(joystick_radius - joystick_handle_radius, joystick_radius - joystick_handle_radius)
@@ -62,13 +60,11 @@ func _build_joystick() -> void:
 	joystick_handle.draw.connect(_draw_joystick_handle)
 	joystick_base.add_child(joystick_handle)
 	
-	# Set the center point for calculations
 	joystick_center = Vector2(joystick_radius, joystick_radius)
 
 # --- Custom Drawing for the Joystick ---
 func _draw_joystick_base() -> void:
 	joystick_base.draw_circle(Vector2(joystick_radius, joystick_radius), joystick_radius, COLOR_BASE)
-	# Draw a border for better visibility
 	joystick_base.draw_arc(Vector2(joystick_radius, joystick_radius), joystick_radius, 0, TAU, 64, COLOR_BASE_BORDER, 2.0)
 
 func _draw_joystick_handle() -> void:
@@ -76,14 +72,10 @@ func _draw_joystick_handle() -> void:
 
 # --- Build the Right Action Buttons ---
 func _build_action_buttons() -> void:
-	var button_size = Vector2(90, 90) # Slightly larger
+	var button_size = Vector2(90, 90)
 	var margin = 40.0
-	var spacing = 110.0 # Space between buttons
+	var spacing = 110.0
 
-	# Using Anchors for screen-size safety.
-	# Anchors are 0-1, where 1 is the bottom/right of the screen.
-	# This keeps the buttons in the corner regardless of screen shape.
-	
 	# ATTACK Button (Big Red)
 	var attack_btn = _create_round_button("ATK", COLOR_ATTACK, button_size)
 	attack_btn.anchor_left = 1.0
@@ -123,18 +115,47 @@ func _build_action_buttons() -> void:
 	rage_btn.pressed.connect(func(): ui_rage_pressed.emit())
 	add_child(rage_btn)
 
+# --- MENU Button in the top-right corner ---
+func _build_menu_button() -> void:
+	var button_size = Vector2(80, 50)
+	var margin = 40.0
+	
+	var menu_btn = _create_round_button("MENU", COLOR_MENU, button_size)
+	menu_btn.anchor_left = 1.0
+	menu_btn.anchor_top = 0.0
+	menu_btn.anchor_right = 1.0
+	menu_btn.anchor_bottom = 0.0
+	menu_btn.offset_left = -margin - button_size.x
+	menu_btn.offset_top = margin
+	menu_btn.offset_right = -margin
+	menu_btn.offset_bottom = margin + button_size.y
+	menu_btn.add_theme_font_size_override("font_size", 16)
+	menu_btn.pressed.connect(_on_menu_pressed)
+	add_child(menu_btn)
+
+# --- MENU Button Handler ---
+# --- MENU Button Handler ---
+func _on_menu_pressed() -> void:
+	print("🏠 MENU pressed — loading: ", menu_scene_path)
+	
+	if menu_scene_path.is_empty():
+		print("⚠️ menu_scene_path is empty! Set it in the Inspector.")
+		return
+	
+	# Defer to the next frame so the button click fully processes first.
+	# Godot handles freeing the old scene tree automatically.
+	get_tree().change_scene_to_file.call_deferred(menu_scene_path)
+
 # --- Helper to make nice round buttons ---
 func _create_round_button(text: String, color: Color, size: Vector2) -> Button:
 	var btn = Button.new()
 	btn.text = text
 	btn.custom_minimum_size = size
-	# Set the pivot to center for rotation if needed later
 	btn.pivot_offset = size / 2.0
 	
 	var style = StyleBoxFlat.new()
 	style.bg_color = color
 	style.set_corner_radius_all(int(size.x / 2.0))
-	# Add a border for contrast
 	style.border_width_left = 2
 	style.border_width_right = 2
 	style.border_width_top = 2
@@ -143,37 +164,28 @@ func _create_round_button(text: String, color: Color, size: Vector2) -> Button:
 	
 	btn.add_theme_stylebox_override("normal", style)
 	
-	# Add a slightly darker style for when pressed
 	var pressed_style = style.duplicate()
 	pressed_style.bg_color = color.darkened(0.3)
 	btn.add_theme_stylebox_override("pressed", pressed_style)
 	
-	# Make font bigger
 	btn.add_theme_font_size_override("font_size", 20)
 	
 	return btn
 
-# --- Input Handling (Directly on the Joystick Base) ---
+# --- Input Handling ---
 func _on_joystick_gui_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		if event.pressed and not is_touching_joystick:
 			is_touching_joystick = true
 			joystick_touch_index = event.index
-			
-			# Update handle position immediately using local coords
 			_update_joystick_handle(event.position)
-			
 		elif not event.pressed and event.index == joystick_touch_index:
-			# Release
 			is_touching_joystick = false
 			joystick_touch_index = -1
 			joystick_handle.position = Vector2(joystick_radius - joystick_handle_radius, joystick_radius - joystick_handle_radius)
 			ui_move_direction.emit(Vector2.ZERO)
-
 	elif event is InputEventScreenDrag and event.index == joystick_touch_index:
 		_update_joystick_handle(event.position)
-		
-	# Support for desktop mouse testing
 	elif event is InputEventMouseButton:
 		if event.pressed:
 			is_touching_joystick = true
@@ -182,19 +194,15 @@ func _on_joystick_gui_input(event: InputEvent) -> void:
 			is_touching_joystick = false
 			joystick_handle.position = Vector2(joystick_radius - joystick_handle_radius, joystick_radius - joystick_handle_radius)
 			ui_move_direction.emit(Vector2.ZERO)
-			
 	elif event is InputEventMouseMotion and is_touching_joystick:
 		_update_joystick_handle(event.position)
 
 # --- Calculate and Clamp the Joystick Handle ---
 func _update_joystick_handle(touch_pos: Vector2) -> void:
-	# touch_pos is LOCAL to the joystick_base
 	var delta = touch_pos - joystick_center
 	var clamped_delta = delta.limit_length(joystick_radius)
 	
-	# Move the visual handle
 	joystick_handle.position = Vector2(joystick_radius - joystick_handle_radius, joystick_radius - joystick_handle_radius) + clamped_delta
 	
-	# Normalize to get the direction (-1 to 1 range)
 	var direction = clamped_delta / joystick_radius
 	ui_move_direction.emit(direction)
