@@ -2,10 +2,31 @@
 
 [ext_resource type="Script" uid="uid://hyt4lra7c7pv" path="res://intro_menu.gd" id="1_62jdl"]
 [ext_resource type="PackedScene" uid="uid://b3xruhg3p2an6" path="res://Scenes/player_1.tscn" id="2_rv1xx"]
+[ext_resource type="Script" uid="uid://ve2p36ut8mpe" path="res://back_ground_menu_node.gd" id="3_owss3"]
+[ext_resource type="PackedScene" uid="uid://cbn2qg2apl24e" path="res://back_ground_node.tscn" id="3_shoea"]
 
-[node name="IntroMenu" type="Control" unique_id=1427385801]
+[node name="IntroMenu" type="Control" unique_id=1427385801 groups=["intro"]]
 layout_mode = 3
 anchors_preset = 0
+size_flags_horizontal = 4
+size_flags_vertical = 0
 script = ExtResource("1_62jdl")
 player_scene = ExtResource("2_rv1xx")
 editor_scene_path = "res://Scenes/tile_map_maker.tscn"
+game_title = "ETCETERA"
+panel_bg_color = Color(0.2728768, 0.07647287, 0.08800467, 0.98)
+panel_border_color = Color(0.5903347, 0.28526115, 0.49594522, 1)
+backdrop_scene = ExtResource("3_shoea")
+metadata/_edit_use_anchors_ = true
+
+[node name="BackGroundMenuNode" type="TextureRect" parent="." unique_id=113788811]
+z_index = 300
+layout_mode = 1
+script = ExtResource("3_owss3")
+formation = 2
+color_a = Color(0.85516155, 0.5271416, 0.6183414, 1)
+color_b = Color(0.83207405, 0.244355, 0.12879586, 1)
+color_c = Color(0.60563046, 0.19196504, 0.69306856, 1)
+background_color = Color(0.6474298, 0.23598742, 0.4149266, 1)
+color_blend_speed = 0.5
+wave_speed = 1.2

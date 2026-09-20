@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://d03rmt3fomdx5"
+path="res://.godot/imported/Wilky R. May - Untitled Sep 15, 2026, 2250 - 1789553947089.m4a (1).ogg-3967f5a7bebf413020fe60b8e5d91506.oggvorbisstr"
+
+[deps]
+
+source_file="res://Etcetera Music Folder/Wilky R. May - Untitled Sep 15, 2026, 2250 - 1789553947089.m4a (1).ogg"
+dest_files=["res://.godot/imported/Wilky R. May - Untitled Sep 15, 2026, 2250 - 1789553947089.m4a (1).ogg-3967f5a7bebf413020fe60b8e5d91506.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4
