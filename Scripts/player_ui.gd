@@ -4,6 +4,7 @@ extends CanvasLayer
 signal ui_move_direction(direction: Vector2)
 signal ui_attack_pressed
 signal ui_jump_pressed
+signal ui_jump_released     # 🔴 NEW: Fires when jump button is released
 signal ui_rage_pressed
 
 # --- Exported Menu Scene Path ---
@@ -89,8 +90,8 @@ func _build_action_buttons() -> void:
 	attack_btn.pressed.connect(func(): ui_attack_pressed.emit())
 	add_child(attack_btn)
 
-	# JUMP Button (Green)
-	var jump_btn = _create_round_button("JMP", COLOR_JUMP, button_size)
+	# JUMP Button (Green) — 🔴 Uses hold-style press/release instead of "pressed"
+	var jump_btn = _create_round_button("JMP", COLOR_JUMP, button_size, true)
 	jump_btn.anchor_left = 1.0
 	jump_btn.anchor_top = 1.0
 	jump_btn.anchor_right = 1.0
@@ -99,7 +100,10 @@ func _build_action_buttons() -> void:
 	jump_btn.offset_top = -margin - button_size.y - (spacing * 1.5)
 	jump_btn.offset_right = -margin - spacing
 	jump_btn.offset_bottom = -margin - (spacing * 1.5)
-	jump_btn.pressed.connect(func(): ui_jump_pressed.emit())
+	# 🔴 NEW: Fire on button DOWN so the hold starts immediately
+	jump_btn.button_down.connect(func(): ui_jump_pressed.emit())
+	# 🔴 NEW: Fire on button UP so the hold is released properly
+	jump_btn.button_up.connect(func(): ui_jump_released.emit())
 	add_child(jump_btn)
 
 	# RAGE Button (Yellow)
@@ -134,7 +138,6 @@ func _build_menu_button() -> void:
 	add_child(menu_btn)
 
 # --- MENU Button Handler ---
-# --- MENU Button Handler ---
 func _on_menu_pressed() -> void:
 	print("🏠 MENU pressed — loading: ", menu_scene_path)
 	
@@ -143,11 +146,13 @@ func _on_menu_pressed() -> void:
 		return
 	
 	# Defer to the next frame so the button click fully processes first.
-	# Godot handles freeing the old scene tree automatically.
 	get_tree().change_scene_to_file.call_deferred(menu_scene_path)
 
 # --- Helper to make nice round buttons ---
-func _create_round_button(text: String, color: Color, size: Vector2) -> Button:
+# 🔴 UPDATED: Optional "use_hold_mode" parameter.
+#   - use_hold_mode = false (default): fires only on "pressed" (release). Good for ATK, RGE, MENU.
+#   - use_hold_mode = true: connect to button_down/button_up yourself. Used for JUMP.
+func _create_round_button(text: String, color: Color, size: Vector2, use_hold_mode: bool = false) -> Button:
 	var btn = Button.new()
 	btn.text = text
 	btn.custom_minimum_size = size
@@ -169,6 +174,9 @@ func _create_round_button(text: String, color: Color, size: Vector2) -> Button:
 	btn.add_theme_stylebox_override("pressed", pressed_style)
 	
 	btn.add_theme_font_size_override("font_size", 20)
+	
+	# 🔴 NEW: Set mouse filter so touch is captured reliably
+	btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	
 	return btn
 
