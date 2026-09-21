@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://ctttfc68qoacc"]
+
+[ext_resource type="Script" uid="uid://c42h71pfg30jn" path="res://music_manager.gd" id="1_bhb8d"]
+[ext_resource type="AudioStream" uid="uid://d03rmt3fomdx5" path="res://Etcetera Music Folder/Wilky R. May - Untitled Sep 15, 2026, 2250 - 1789553947089.m4a (1).ogg" id="2_vnq4w"]
+[ext_resource type="AudioStream" uid="uid://bvqslk5q8fefk" path="res://Etcetera Music Folder/MX_Lvl5.ogg" id="3_0rsql"]
+[ext_resource type="AudioStream" uid="uid://inqn1pm0rnuk" path="res://Etcetera Music Folder/TRR_ThrashMetal_Lvl_5-2.ogg" id="4_vnq4w"]
+
+[node name="MusicManager" type="Node2D" unique_id=634754284]
+script = ExtResource("1_bhb8d")
+intro_tracks = Array[AudioStream]([ExtResource("2_vnq4w")])
+battle_tracks = Array[AudioStream]([ExtResource("3_0rsql"), ExtResource("4_vnq4w")])

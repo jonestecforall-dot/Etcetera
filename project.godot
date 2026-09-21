@@ -11,9 +11,13 @@ config_version=5
 [application]
 
 config/name="DiscordGameHelp"
-run/main_scene="uid://cbdil0e8m71y6"
+run/main_scene="uid://baegceyq3sayl"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
+
+[autoload]
+
+MusicManager="*uid://ctttfc68qoacc"
 
 [display]
 

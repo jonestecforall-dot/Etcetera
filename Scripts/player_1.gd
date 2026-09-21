@@ -14,6 +14,16 @@ var wall_slide_gravity : float = 100.0
 @export var textures: Array[Texture2D] = []
 @export var texture_position: Node2D
 
+# 🆕 Shell base size — applies uniformly to all spawned shell textures.
+# Set this to the pixel-perfect base size of your shell art.
+# The sprite is scaled so its texture matches this size on-screen.
+@export var shell_base_size : Vector2 = Vector2(32, 32)
+
+# 🆕 Optional: keep shell textures pixel-perfect regardless of camera zoom.
+# If true, the shell is scaled to shell_base_size exactly.
+# If false, sprite keeps original texture dimensions.
+@export var force_shell_base_size : bool = true
+
 # --- JUMPING EXPORTS ---
 @export_group("Jumping")
 @export var jump_force: float = -400.0
@@ -22,6 +32,8 @@ var wall_slide_gravity : float = 100.0
 @export var coyote_time: float = 0.1
 @export var jump_buffer: float = 0.1
 @export var fall_multiplier: float = 1.5
+@export var jump_cut_multiplier: float = 0.5
+@export var max_jump_hold_time: float = 0.3
 
 # --- SHOOTING EXPORTS ---
 @export_group("Shooting")
@@ -38,6 +50,12 @@ var wall_slide_gravity : float = 100.0
 @export var stun_duration : float = 2.0
 @export var hit_flash_color : Color = Color(1, 0, 0)
 @export var hit_flash_duration : float = 0.1
+
+# 🌊 DROWNING
+@export_group("Water")
+@export var drown_damage_interval : float = 1.0
+@export var drown_damage_amount : int = 1
+@export var debug_water : bool = true
 
 # --- Exported Sounds ---
 @export_group("Sounds")
@@ -66,6 +84,25 @@ var is_jumping : bool = false
 var jump_buffer_timer : float = 0.0
 var coyote_timer : float = 0.0
 
+var is_holding_jump : bool = false
+var jump_hold_timer : float = 0.0
+
+# 🌊 Water state
+var in_water : bool = false
+var drown_timer : float = 0.0
+
+# Shell system state
+var current_shell_name : String = ""
+var current_shell_texture : Texture2D = null
+var active_power_ups : Array = []
+
+# Ability flags — set by power-up scripts
+var can_breathe_underwater : bool = false
+var can_climb_metal : bool = false
+var has_heavy_slam : bool = false
+var has_slow_fall : bool = false
+var has_fire_attack : bool = false
+
 # --- Resolved Node References ---
 var camera : Camera2D
 var collision_shape : CollisionShape2D
@@ -87,7 +124,6 @@ func _ready() -> void:
 	_resolve_nodes()
 	_spawn_textures()
 	
-	# Cache the RAW X (no abs), so the editor placement = facing-right position
 	if is_instance_valid(texture_position):
 		texture_position_base_x = texture_position.position.x
 	
@@ -104,18 +140,105 @@ func _ready() -> void:
 		if parent is Area2D:
 			parent.connect("body_entered", _on_hurtbox_body_entered)
 
+	# 🆕 Register in the player group so MusicManager can detect gameplay state.
+	if not is_in_group("player"):
+		add_to_group("player")
+		print("🎮 Player registered in 'player' group")
+
 	if ui_node_path:
 		mobile_ui = get_node(ui_node_path)
 		if mobile_ui:
 			mobile_ui.ui_move_direction.connect(_on_ui_move)
 			mobile_ui.ui_attack_pressed.connect(_on_ui_attack)
 			mobile_ui.ui_jump_pressed.connect(_on_ui_jump)
+			if mobile_ui.has_signal("ui_jump_released"):
+				mobile_ui.ui_jump_released.connect(_on_ui_jump_released)
 			mobile_ui.ui_rage_pressed.connect(_on_ui_rage)
 
 	_find_logic_nodes()
 	for logic in logic_nodes:
 		if logic.has_method("initialize"):
 			logic.initialize(self, sprite, audio_player)
+
+# ==========================================
+# SHELL SYSTEM — public API
+# ==========================================
+func equip_shell(new_texture: Texture2D, new_name: String, power_ups: Array = []) -> void:
+	clear_all_power_ups()
+
+	current_shell_name = new_name
+	current_shell_texture = new_texture
+
+	if new_texture and is_instance_valid(texture_position):
+		var swapped := false
+		for child in texture_position.get_children():
+			if child is Sprite2D:
+				child.texture = new_texture
+				# 🆕 Apply base size scaling whenever the shell texture changes.
+				_apply_shell_size(child)
+				swapped = true
+				break
+		if not swapped:
+			print("⚠️ No Sprite2D under texture_position to swap the shell onto!")
+	elif new_texture == null:
+		print("⚠️ equip_shell got a NULL texture for '", new_name, "'")
+
+	for power_up in power_ups:
+		if power_up == null:
+			continue
+		if power_up.has_method("apply"):
+			power_up.apply(self)
+		add_child(power_up)
+		active_power_ups.append(power_up)
+
+	print("🐚 Player equipped shell: ", new_name, " (", power_ups.size(), " power-ups)")
+
+# 🆕 Sizes a shell sprite so its texture occupies shell_base_size on screen.
+func _apply_shell_size(spr: Sprite2D) -> void:
+	if not force_shell_base_size:
+		spr.scale = Vector2.ONE
+		return
+	if spr.texture == null:
+		return
+	var tex_size := Vector2(spr.texture.get_width(), spr.texture.get_height())
+	if tex_size.x <= 0.0 or tex_size.y <= 0.0:
+		return
+	spr.scale = Vector2(
+		shell_base_size.x / tex_size.x,
+		shell_base_size.y / tex_size.y
+	)
+
+func register_power_up(power_up: Node) -> void:
+	if power_up == null:
+		return
+	if not active_power_ups.has(power_up):
+		active_power_ups.append(power_up)
+
+func remove_power_up(power_up: Node) -> void:
+	if power_up == null:
+		return
+	if active_power_ups.has(power_up):
+		if power_up.has_method("remove"):
+			power_up.remove(self)
+		active_power_ups.erase(power_up)
+
+func clear_all_power_ups() -> void:
+	for power_up in active_power_ups:
+		if is_instance_valid(power_up):
+			if power_up.has_method("remove"):
+				power_up.remove(self)
+			power_up.queue_free()
+	active_power_ups.clear()
+
+	can_breathe_underwater = false
+	can_climb_metal = false
+	has_heavy_slam = false
+	has_slow_fall = false
+	has_fire_attack = false
+
+# ==========================================
+# END SHELL SYSTEM
+# ==========================================
 
 func _spawn_textures() -> void:
 	if textures.is_empty():
@@ -134,13 +257,13 @@ func _spawn_textures() -> void:
 		spr.z_as_relative = z_as_relative
 		texture_position.add_child(spr)
 		spr.position = Vector2.ZERO
+		# 🆕 Apply the shell base size on initial spawn too.
+		_apply_shell_size(spr)
 		spawned_textures.append(spr)
 
 func _update_texture_flip() -> void:
 	if not is_instance_valid(texture_position):
 		return
-	# Facing right  -> keep as placed (-17 = behind)
-	# Facing left   -> mirror to +17 (behind on the other side)
 	if facing_direction == Vector2.LEFT:
 		texture_position.position.x = -texture_position_base_x
 	else:
@@ -174,10 +297,87 @@ func play_sound(sound_type: String) -> void:
 				audio_player.stream = jump_sound
 				audio_player.play()
 
+func _input(event: InputEvent) -> void:
+	if event.is_action_released("ui_accept"):
+		_release_jump()
+
+# ==========================================
+# 🌊 WATER DETECTION
+# ==========================================
+func _update_water_state(delta: float) -> void:
+	var was_in_water := in_water
+	in_water = false
+	
+	var found_count := 0
+	for node in get_tree().get_nodes_in_group("water"):
+		found_count += 1
+		if node is Area2D and node.overlaps_body(self):
+			in_water = true
+			break
+	
+	if found_count == 0:
+		var root := get_tree().current_scene
+		if root:
+			for node in _find_water_areas(root):
+				found_count += 1
+				if node is Area2D and node.overlaps_body(self):
+					in_water = true
+					break
+	
+	if debug_water and Engine.get_physics_frames() % 60 == 0:
+		print("🌊 water check | found=", found_count, " in_water=", in_water, " health=", current_health)
+	
+	if in_water and not was_in_water and debug_water:
+		print("🌊 Entered water | can_breathe=", can_breathe_underwater)
+	elif not in_water and was_in_water and debug_water:
+		print("🌊 Left water")
+	
+	if in_water and not can_breathe_underwater:
+		drown_timer += delta
+		if drown_timer >= drown_damage_interval:
+			drown_timer = 0.0
+			if debug_water:
+				print("💀 Drowning!")
+			take_damage(drown_damage_amount)
+	else:
+		drown_timer = 0.0
+
+var _cached_water_areas : Array[Area2D] = []
+
+func _find_water_areas(root: Node) -> Array:
+	if _cached_water_areas.size() > 0:
+		var valid := true
+		for w in _cached_water_areas:
+			if not is_instance_valid(w) or not w.is_inside_tree():
+				valid = false
+				break
+		if valid:
+			return _cached_water_areas
+		_cached_water_areas.clear()
+	
+	_scan_for_water(root)
+	return _cached_water_areas
+
+func _scan_for_water(node: Node) -> void:
+	if node is Area2D and node.name.begins_with("WaterArea_"):
+		_cached_water_areas.append(node)
+	for child in node.get_children():
+		_scan_for_water(child)
+
 func _physics_process(delta: float) -> void:
+	_update_water_state(delta)
+	
 	if is_stunned or is_dead:
 		velocity = Vector2.ZERO
 		return
+
+	if is_holding_jump:
+		jump_hold_timer += delta
+		if jump_hold_timer >= max_jump_hold_time:
+			is_holding_jump = false
+	else:
+		if velocity.y < 0:
+			velocity.y *= (1.0 - (1.0 - jump_cut_multiplier) * delta * 10.0)
 
 	var direction = ui_input_direction
 	if direction == Vector2.ZERO: 
@@ -199,25 +399,35 @@ func _physics_process(delta: float) -> void:
 				is_wall_sliding = true
 				wall_normal = get_wall_normal()
 		
+		var current_gravity = gravity
+		if has_heavy_slam and not is_on_floor() and velocity.y > 0:
+			current_gravity = gravity * 3.0
+		
 		if is_wall_sliding:
 			if velocity.y > 0:
 				velocity.y = min(velocity.y, wall_slide_gravity)
 			else:
-				velocity.y += gravity * delta
+				velocity.y += current_gravity * delta
 		else:
-			if velocity.y > 0:
-				velocity.y += gravity * fall_multiplier * delta
+			if has_slow_fall and not is_on_floor() and velocity.y > 0:
+				velocity.y += current_gravity * 0.35 * delta
+				if velocity.y > 120.0:
+					velocity.y = 120.0
 			else:
-				velocity.y += gravity * delta
+				if velocity.y > 0:
+					velocity.y += current_gravity * fall_multiplier * delta
+				else:
+					velocity.y += current_gravity * delta
 		
 		if is_on_floor():
 			coyote_timer = coyote_time
+			if has_heavy_slam and velocity.y > 200.0:
+				_trigger_anvil_slam()
 		else:
 			coyote_timer -= delta
 		
 		jump_buffer_timer -= delta
 
-	# --- UPDATE FACING DIRECTION ---
 	if direction != Vector2.ZERO:
 		last_direction = direction.normalized()
 		
@@ -229,7 +439,6 @@ func _physics_process(delta: float) -> void:
 			sprite.flip_h = false
 			facing_direction = Vector2.RIGHT
 
-	# Swap the backpack to the trailing side
 	_update_texture_flip()
 
 	direction = direction.normalized()
@@ -282,12 +491,30 @@ func _physics_process(delta: float) -> void:
 	
 	if is_on_floor() and is_jumping:
 		is_jumping = false
+		is_holding_jump = false
+
+func _trigger_anvil_slam() -> void:
+	print("⚒️ Anvil slam!")
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if enemy is Node2D:
+			if global_position.distance_to(enemy.global_position) < 40.0:
+				if enemy.has_method("take_hit"):
+					enemy.take_hit("slam", global_position)
+	for floor_tile in get_tree().get_nodes_in_group("breakable_floor"):
+		if floor_tile is Node2D:
+			if global_position.distance_to(floor_tile.global_position) < 40.0:
+				if floor_tile.has_method("break_floor"):
+					floor_tile.break_floor()
+				else:
+					floor_tile.queue_free()
 
 func _do_jump() -> void:
 	velocity.y = jump_force
 	is_jumping = true
 	coyote_timer = 0
 	jump_buffer_timer = 0
+	is_holding_jump = true
+	jump_hold_timer = 0.0
 	play_sound("jump")
 	if is_instance_valid(sprite) and sprite.has_method("update_visual_state"): 
 		sprite.update_visual_state("jumping")
@@ -311,6 +538,16 @@ func _on_ui_attack() -> void:
 func _on_ui_jump() -> void:
 	print("UI Jump pressed!")
 	jump_buffer_timer = jump_buffer
+	is_holding_jump = true
+	jump_hold_timer = 0.0
+
+func _on_ui_jump_released() -> void:
+	_release_jump()
+
+func _release_jump() -> void:
+	is_holding_jump = false
+	if velocity.y < 0:
+		velocity.y *= jump_cut_multiplier
 
 func _on_ui_rage() -> void:
 	print("UI Rage pressed!")
@@ -462,11 +699,56 @@ func _end_stun() -> void:
 
 func _die() -> void:
 	is_dead = true
-	if collision_shape: collision_shape.set_deferred("disabled", true)
+	if collision_shape:
+		collision_shape.set_deferred("disabled", true)
 	if is_instance_valid(sprite) and sprite.has_method("update_visual_state"): 
 		sprite.update_visual_state("dead")
 	play_sound("death")
-	queue_free()
+	print("☠️ Player died — respawning...")
+	
+	await get_tree().create_timer(0.5).timeout
+	
+	if not is_instance_valid(self):
+		return
+	
+	var level := get_tree().current_scene
+	if level and level.has_method("respawn_player"):
+		level.respawn_player(self)
+	else:
+		global_position = Vector2.ZERO
+	
+	is_dead = false
+	is_stunned = false
+	in_water = false
+	drown_timer = 0.0
+	current_health = max_health
+	velocity = Vector2.ZERO
+	if collision_shape:
+		collision_shape.set_deferred("disabled", false)
+	if is_instance_valid(sprite) and sprite.has_method("update_visual_state"):
+		sprite.update_visual_state("idle")
+	sprite.modulate = Color(1, 1, 1, 1)
+	
+	if has_method("on_respawn"):
+		on_respawn()
+
+func on_respawn() -> void:
+	is_dead = false
+	is_stunned = false
+	in_water = false
+	drown_timer = 0.0
+	current_health = max_health
+	velocity = Vector2.ZERO
+	
+	if collision_shape:
+		collision_shape.set_deferred("disabled", false)
+	
+	if is_instance_valid(sprite):
+		sprite.modulate = Color(1, 1, 1, 1)
+		if sprite.has_method("update_visual_state"):
+			sprite.update_visual_state("idle")
+	
+	print("🌊 on_respawn — health restored to ", current_health)
 
 func _flash_on_hit() -> void:
 	if is_instance_valid(sprite):

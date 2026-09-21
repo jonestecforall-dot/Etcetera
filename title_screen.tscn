@@ -1,0 +1,30 @@
+[gd_scene format=3 uid="uid://baegceyq3sayl"]
+
+[ext_resource type="Script" uid="uid://crgwmclrimlo8" path="res://title_screen.gd" id="1_v6p8y"]
+[ext_resource type="FontFile" uid="uid://ceprvphh4nbwa" path="res://Fonts/CaveatBrush-Regular.ttf" id="2_05l2w"]
+[ext_resource type="Script" uid="uid://gyihxmnsyn3e" path="res://title_screen_ui.gd" id="2_ak2if"]
+[ext_resource type="Script" uid="uid://bk6x7u6gg0n8d" path="res://title_swoosh.gd" id="3_ig5kc"]
+
+[node name="TitleScreen" type="Control" unique_id=44386566]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_v6p8y")
+ui_canvas_layer_path = NodePath("TitleScreenUI")
+swoosh_node_path = NodePath("TitleSwoosh")
+studio_line_1_font = ExtResource("2_05l2w")
+presents_font = ExtResource("2_05l2w")
+logo_font = ExtResource("2_05l2w")
+company_font = ExtResource("2_05l2w")
+press_start_font = ExtResource("2_05l2w")
+fee_line_font = ExtResource("2_05l2w")
+
+[node name="TitleScreenUI" type="CanvasLayer" parent="." unique_id=1787586669]
+script = ExtResource("2_ak2if")
+
+[node name="TitleSwoosh" type="CanvasLayer" parent="." unique_id=936541494]
+script = ExtResource("3_ig5kc")

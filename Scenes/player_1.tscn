@@ -1,14 +1,10 @@
 [gd_scene format=3 uid="uid://b3xruhg3p2an6"]
 
 [ext_resource type="Script" uid="uid://c2aqlpuhfofrs" path="res://Scripts/player_1.gd" id="1_squ5q"]
+[ext_resource type="Texture2D" uid="uid://csj4vl8i6qyj7" path="res://AnimationsFolder/photo_edit_2026-09-17T18-12-54.png" id="2_aatkl"]
 [ext_resource type="Texture2D" uid="uid://c0xdtc8ot0rk1" path="res://AnimationsFolder/photo_edit_2026-08-31T17-02-30.png" id="2_buxg0"]
 [ext_resource type="Script" uid="uid://dmm8qaqn1gsdv" path="res://Scripts/player_ui.gd" id="2_bxx23"]
 [ext_resource type="Script" uid="uid://bs3l5dj5r5gko" path="res://Scripts/player_anim.gd" id="2_qh3su"]
-[ext_resource type="Texture2D" uid="uid://c2mqhca5r6vc3" path="res://World/Berie's_Adventure_Seaside_Asset_Pack_Free/Berie's_Adventure_Seaside_Asset_Pack_Free/PNG/vegetation_tree_palm5.png" id="6_i66ns"]
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_xi86e"]
-atlas = ExtResource("6_i66ns")
-region = Rect2(16, 12, 63, 71)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_buxg0"]
 atlas = ExtResource("2_buxg0")
@@ -28,9 +24,11 @@ animations = [{
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_8rlr6"]
 
 [node name="Player1" type="CharacterBody2D" unique_id=2145816245 node_paths=PackedStringArray("texture_position") groups=["player"]]
+scale = Vector2(1.5, 1.5)
 script = ExtResource("1_squ5q")
-textures = Array[Texture2D]([SubResource("AtlasTexture_xi86e")])
+textures = Array[Texture2D]([ExtResource("2_aatkl")])
 texture_position = NodePath("Node2D")
+shell_base_size = Vector2(85, 85)
 camera_node_path = NodePath("Camera2D")
 collision_node_path = NodePath("CollisionShape2D")
 sprite_node_path = NodePath("SpriteNode")
@@ -48,11 +46,10 @@ sprite_frames_data = SubResource("SpriteFrames_buxg0")
 shape = SubResource("RectangleShape2D_8rlr6")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=617305400]
-zoom = Vector2(1.5, 1.5)
 
 [node name="PlayerUI" type="CanvasLayer" parent="." unique_id=508205700]
 script = ExtResource("2_bxx23")
-menu_scene_path = "uid://cbdil0e8m71y6"
 
 [node name="Node2D" type="Node2D" parent="." unique_id=945623613]
 position = Vector2(-17, -14)
+scale = Vector2(0.5, 0.5)
