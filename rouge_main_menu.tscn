@@ -1,0 +1,48 @@
+[gd_scene format=3 uid="uid://c8ypdy12l53as"]
+
+[ext_resource type="Script" uid="uid://bvf2nmnc2elsb" path="res://rouge_main_menu.gd" id="1_isyvt"]
+[ext_resource type="Script" uid="uid://dqgcpsyptnb34" path="res://static_background.gd" id="2_xbdhe"]
+[ext_resource type="Script" uid="uid://bgi5tppswla1h" path="res://re_cbutton.gd" id="3_d3ygc"]
+[ext_resource type="Script" uid="uid://b2w1y7vgtkvac" path="res://rougemenu.gd" id="4_8td5m"]
+[ext_resource type="FontFile" uid="uid://ceprvphh4nbwa" path="res://Fonts/CaveatBrush-Regular.ttf" id="4_xq256"]
+
+[node name="RougePauseMenu" type="Control" unique_id=235910224 node_paths=PackedStringArray("static_background", "rec_panel", "pause_menu")]
+process_mode = 3
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_isyvt")
+static_background = NodePath("StaticBackground")
+rec_panel = NodePath("RECbutton")
+pause_menu = NodePath("Rougemenu")
+
+[node name="StaticBackground" type="Control" parent="." unique_id=192056171]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_xbdhe")
+
+[node name="RECbutton" type="Control" parent="." unique_id=1082613764]
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("3_d3ygc")
+font = ExtResource("4_xq256")
+
+[node name="Rougemenu" type="Control" parent="." unique_id=1766381408]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("4_8td5m")
+font = ExtResource("4_xq256")
+build_scene_path = "uid://biqpsffbhdae3"
+quit_scene_path = "uid://cbdil0e8m71y6"

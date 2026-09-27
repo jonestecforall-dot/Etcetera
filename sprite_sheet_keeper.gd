@@ -9,11 +9,19 @@ extends Control
 # =============================================================================
 @export_group("Inputs")
 @export var sprite_sheets : Array[Texture2D] = []
+@export var detection_mode : int = 0
+# 0 = GRID (default)
+# 1 = TRANSPARENCY
 
+@export var transparency_alpha_cutoff : float = 0.5
+@export var merge_close_distance : int = 4
+@export var waist_min_pixels : int = 2
 @export_group("UI")
 @export var ui_canvas_layer : CanvasLayer
 @export var animation_preview : AnimatedSprite2D
 
+# 0 = GRID (default, current behavior)
+# 1 = TRANSPARENCY (extract non-uniform sprites)
 @export_group("Detection")
 @export var min_cell_size : int = 2
 @export var padding : int = 1
@@ -72,8 +80,6 @@ func detect_all() -> void:
 		ui_canvas_layer.on_sheets_detected(detected_sheets)
 	
 	queue_redraw()
-
-
 func detect_sheet(texture: Texture2D) -> Dictionary:
 	var image := texture.get_image()
 	if image == null:
@@ -95,6 +101,57 @@ func detect_sheet(texture: Texture2D) -> Dictionary:
 		"rows": [],
 		"avg_cell_size": Vector2.ZERO
 	}
+	
+	# ---- 🆕 TRANSPARENCY MODE ----
+	# Extract sprites by connected non-transparent regions instead of grid.
+	# Handles sheets with irregular spacing, mixed sizes, and touching sprites.
+	if detection_mode == 1:
+		print("🔍 Using TRANSPARENCY mode on sheet ", sheet_size)
+		
+		var t_blocks := _detect_by_transparency(image, bg_color)
+		
+		# Merge blobs that are parts of the same sprite
+		if merge_close_distance > 0 and t_blocks.size() > 1:
+			t_blocks = _merge_close_rects(t_blocks, merge_close_distance)
+		
+		# Filter tiny blocks (noise pixels, stray dots, etc.)
+		var t_filtered := []
+		for cell in t_blocks:
+			var r: Rect2i = cell["rect"]
+			if r.size.x >= min_cell_size and r.size.y >= min_cell_size:
+				t_filtered.append(cell)
+		
+		# ── Keep only the largest row of cells ──
+		# Kills stragglers the merger couldn't reconnect. Ideal for
+		# single-row animation sheets like Kaia's 1280x64.
+		if t_filtered.size() > 1:
+			t_filtered = _keep_dominant_row(t_filtered)
+		
+		# ── 🆕 Rebuild a clean, centered sheet ──
+		# Instead of trying to align rects in the original sheet (which can
+		# jitter due to misaligned source art), build a brand-new image where
+		# every sprite is centered in its own uniform cell.
+		if t_filtered.size() > 1:
+			var rebuild := _rebuild_centered_sheet(t_filtered, image, bg_color)
+			var new_image : Image = rebuild["image"]
+			var new_tex := ImageTexture.create_from_image(new_image)
+			sheet_data["texture"] = new_tex
+			sheet_data["image"] = new_image
+			sheet_data["sheet_size"] = Vector2i(new_image.get_width(), new_image.get_height())
+			t_filtered = rebuild["cells"]
+		
+		sheet_data["cells"] = t_filtered
+		sheet_data["rows"] = _group_cells_by_row(t_filtered)
+		sheet_data["avg_cell_size"] = _compute_avg_cell_size(t_filtered)
+		
+		_last_debug_image = sheet_data["image"]
+		_last_debug_sheet_index = detected_sheets.size()
+		
+		if debug_enabled:
+			_print_sheet_debug(sheet_data)
+		
+		return sheet_data
+	# ------------------------------
 	
 	if force_grid_mode:
 		sheet_data["cells"] = _detect_grid(image, grid_rows, grid_cols)
@@ -133,6 +190,170 @@ func detect_sheet(texture: Texture2D) -> Dictionary:
 	
 	return sheet_data
 
+# =============================================================================
+# 📐 NORMALIZE CELL SIZES
+# =============================================================================
+# Resizes every cell rect to the same dimensions, centered on the sprite's
+# original content. Prevents animation jitter from mismatched frame sizes.
+# Cells are clamped to the sheet bounds — no out-of-bounds sampling.
+# =============================================================================
+# 📐 NORMALIZE + CENTER CELLS ON CONTENT
+# =============================================================================
+# Sizes every cell to the same dimensions AND recenters each sprite so its
+# content centroid aligns with the cell's center. Fixes left/right jitter
+# caused by frames where the sprite is drawn off-center.
+func _normalize_cell_sizes(cells: Array, image: Image, bg: Color) -> Array:
+	if cells.is_empty():
+		return cells
+	
+	var bg_is_opaque : bool = bg.a >= 0.5
+	
+	# ── Pass 1: find max content width and height across all cells ──
+	var max_w : int = 0
+	var max_h : int = 0
+	for cell in cells:
+		var r : Rect2i = cell["rect"]
+		var content := _find_content_bounds(image, r, bg, bg_is_opaque)
+		if content.size.x > max_w: max_w = content.size.x
+		if content.size.y > max_h: max_h = content.size.y
+	
+	# Padding so sprites never touch the cell edge
+	max_w += 4
+	max_h += 4
+	
+	var sheet_w : int = image.get_width()
+	var sheet_h : int = image.get_height()
+	
+	# ── Pass 2: build normalized cells with content centered ──
+	var normalized : Array = []
+	for cell in cells:
+		var r : Rect2i = cell["rect"]
+		var content := _find_content_bounds(image, r, bg, bg_is_opaque)
+		
+		# Center of the sprite's actual content
+		var cx : int = content.position.x + content.size.x / 2
+		var cy : int = content.position.y + content.size.y / 2
+		
+		# Shift the new cell so its center aligns with the content center
+		var new_x : int = cx - max_w / 2
+		var new_y : int = cy - max_h / 2
+		
+		# Clamp so we stay inside the sheet (no sampling outside)
+		new_x = clampi(new_x, 0, max(0, sheet_w - max_w))
+		new_y = clampi(new_y, 0, max(0, sheet_h - max_h))
+		
+		normalized.append({
+			"rect": Rect2i(new_x, new_y, max_w, max_h),
+			"confidence": cell["confidence"],
+			"reason": cell["reason"] + "_centered"
+		})
+	
+	print("📐 Normalized + centered ", cells.size(), " cells to ", max_w, "x", max_h)
+	return normalized
+
+
+# Finds the tight bounding box of non-transparent content within a rect.
+# Used to compute the actual visual center of a sprite (ignoring padding
+# inside the cell that the flood fill may have included).
+
+# Finds the tight bounding box of non-transparent content within a rect.
+# Used to compute the actual visual center of a sprite (ignoring padding
+# inside the cell that the flood fill may have included).
+func _find_content_bounds(image: Image, r: Rect2i, bg: Color, bg_is_opaque: bool) -> Rect2i:
+	var min_x : int = r.position.x + r.size.x
+	var max_x : int = r.position.x
+	var min_y : int = r.position.y + r.size.y
+	var max_y : int = r.position.y
+	
+	var w := image.get_width()
+	var h := image.get_height()
+	
+	for cy in range(r.position.y, r.position.y + r.size.y):
+		if cy < 0 or cy >= h:
+			continue
+		for cx in range(r.position.x, r.position.x + r.size.x):
+			if cx < 0 or cx >= w:
+				continue
+			var px := image.get_pixel(cx, cy)
+			var ok : bool = px.a > transparency_alpha_cutoff
+			if ok and bg_is_opaque:
+				ok = not _colors_close(px, bg, bg_tolerance)
+			if ok:
+				if cx < min_x: min_x = cx
+				if cx > max_x: max_x = cx
+				if cy < min_y: min_y = cy
+				if cy > max_y: max_y = cy
+	
+	if min_x > max_x or min_y > max_y:
+		return r
+	
+	return Rect2i(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
+
+
+# =============================================================================
+# ⚓ FIND ANCHOR POINT (weighted by pixel density)
+# =============================================================================
+# Computes a stable anchor point for a sprite by finding the horizontal row
+# with the most pixels, and using the center of that row as the X anchor.
+# Robust against asymmetric silhouettes (like a swinging antenna).
+func _find_anchor_point(image: Image, r: Rect2i, bg: Color, bg_is_opaque: bool) -> Vector2i:
+	var w := image.get_width()
+	var h := image.get_height()
+	
+	var row_counts := PackedInt32Array()
+	row_counts.resize(r.size.y)
+	var row_min_x := PackedInt32Array()
+	var row_max_x := PackedInt32Array()
+	row_min_x.resize(r.size.y)
+	row_max_x.resize(r.size.y)
+	for i in range(r.size.y):
+		row_min_x[i] = 1_000_000
+		row_max_x[i] = -1_000_000
+	
+	for cy in range(r.size.y):
+		var src_y : int = r.position.y + cy
+		if src_y < 0 or src_y >= h:
+			continue
+		var count := 0
+		for cx in range(r.size.x):
+			var src_x : int = r.position.x + cx
+			if src_x < 0 or src_x >= w:
+				continue
+			var px := image.get_pixel(src_x, src_y)
+			var ok : bool = px.a > transparency_alpha_cutoff
+			if ok and bg_is_opaque:
+				ok = not _colors_close(px, bg, bg_tolerance)
+			if ok:
+				count += 1
+				if src_x < row_min_x[cy]: row_min_x[cy] = src_x
+				if src_x > row_max_x[cy]: row_max_x[cy] = src_x
+		row_counts[cy] = count
+	
+	var best_row : int = 0
+	var best_count : int = 0
+	for cy in range(r.size.y):
+		if row_counts[cy] > best_count:
+			best_count = row_counts[cy]
+			best_row = cy
+	
+	var anchor_x : int = (row_min_x[best_row] + row_max_x[best_row]) / 2
+	if row_min_x[best_row] > row_max_x[best_row]:
+		anchor_x = r.position.x + r.size.x / 2
+	
+	var dense_top : int = best_row
+	var dense_bot : int = best_row
+	var threshold : int = best_count / 2
+	for cy in range(best_row, -1, -1):
+		if row_counts[cy] < threshold:
+			break
+		dense_top = cy
+	for cy in range(best_row, r.size.y):
+		if row_counts[cy] < threshold:
+			break
+		dense_bot = cy
+	var anchor_y : int = r.position.y + (dense_top + dense_bot) / 2
+	
+	return Vector2i(anchor_x, anchor_y)
 
 func play_preview(sheet_index: int, row_index: int, anim_name: String = "") -> void:
 	if animation_preview == null:
@@ -716,3 +937,582 @@ func save_merged_rows_as_sprite_frames(sheet_index: int, path: String) -> int:
 			sf.add_frame(anim_name, at)
 	
 	return ResourceSaver.save(sf, path)
+
+
+# =============================================================================
+# 🔄 RE-DETECT SINGLE SHEET WITH A SPECIFIC MODE
+# =============================================================================
+# Called by the UI when the user toggles Grid/Transparency on a sheet.
+# Doesn't touch the other sheets — only re-detects the one requested.
+func redetect_sheet_with_mode(sheet_index: int, mode: int) -> bool:
+	if sheet_index < 0 or sheet_index >= sprite_sheets.size():
+		return false
+	var tex : Texture2D = sprite_sheets[sheet_index]
+	if tex == null:
+		return false
+	
+	# Remember the old mode, temporarily force the requested one,
+	# re-detect this sheet, then restore the old mode.
+	var old_mode : int = detection_mode
+	detection_mode = mode
+	
+	var data : Dictionary = detect_sheet(tex)
+	
+	detection_mode = old_mode
+	
+	# Only commit if detection actually returned something
+	if data.is_empty():
+		return false
+	
+	# Preserve the index slot
+	while detected_sheets.size() <= sheet_index:
+		detected_sheets.append({})
+	detected_sheets[sheet_index] = data
+	
+	# Redraw the debug overlay in case it's showing this sheet
+	_last_debug_image = data.get("image", null)
+	_last_debug_sheet_index = sheet_index
+	queue_redraw()
+	
+	return true
+
+
+# =============================================================================
+# 🔍 TRANSPARENCY MODE — EXTRACT NON-UNIFORM SPRITES
+# =============================================================================
+# Finds every connected region of non-transparent pixels. Uses a 4-connected
+# flood fill (BFS) so no recursion depth issues on large sheets.
+# Returns an array of {rect, confidence, reason} dictionaries, same shape
+# as the grid detector, so downstream code doesn't care which mode produced it.
+func _detect_by_transparency(image: Image, bg: Color) -> Array:
+	var w := image.get_width()
+	var h := image.get_height()
+	
+	# ---- 1. Build a boolean "content" map ----
+	# A pixel is content if it's opaque enough AND not close to the bg color
+	# (when the bg is opaque). If bg is transparent, any opaque pixel counts.
+	var is_content := PackedByteArray()
+	is_content.resize(w * h)
+	
+	var bg_is_opaque : bool = bg.a >= 0.5
+	
+	for y in range(h):
+		var row_base := y * w
+		for x in range(w):
+			var px := image.get_pixel(x, y)
+			var ok : bool = px.a > transparency_alpha_cutoff
+			if ok and bg_is_opaque:
+				ok = not _colors_close(px, bg, bg_tolerance)
+			is_content[row_base + x] = 1 if ok else 0
+	
+	# ---- 2. Flood fill to find connected components ----
+	var visited := PackedByteArray()
+	visited.resize(w * h)
+	
+	var rects : Array = []
+	
+	for y in range(h):
+		var row_base := y * w
+		for x in range(w):
+			var seed_idx := row_base + x
+			if is_content[seed_idx] == 0 or visited[seed_idx] == 1:
+				continue
+			
+			# BFS from this seed — expand to the full connected blob
+			var min_x := x
+			var max_x := x
+			var min_y := y
+			var max_y := y
+			
+			var stack : Array = [Vector2i(x, y)]
+			visited[seed_idx] = 1
+			
+			while stack.size() > 0:
+				var p : Vector2i = stack.pop_back()
+				if p.x < min_x: min_x = p.x
+				if p.x > max_x: max_x = p.x
+				if p.y < min_y: min_y = p.y
+				if p.y > max_y: max_y = p.y
+				
+				var px_idx := p.y * w + p.x
+				
+				# 4-connected neighbors
+				# (up)
+				if p.y > 0:
+					var ni := px_idx - w
+					if is_content[ni] == 1 and visited[ni] == 0:
+						visited[ni] = 1
+						stack.append(Vector2i(p.x, p.y - 1))
+				# (down)
+				if p.y < h - 1:
+					var ni := px_idx + w
+					if is_content[ni] == 1 and visited[ni] == 0:
+						visited[ni] = 1
+						stack.append(Vector2i(p.x, p.y + 1))
+				# (left)
+				if p.x > 0:
+					var ni := px_idx - 1
+					if is_content[ni] == 1 and visited[ni] == 0:
+						visited[ni] = 1
+						stack.append(Vector2i(p.x - 1, p.y))
+				# (right)
+				if p.x < w - 1:
+					var ni := px_idx + 1
+					if is_content[ni] == 1 and visited[ni] == 0:
+						visited[ni] = 1
+						stack.append(Vector2i(p.x + 1, p.y))
+			
+			var rw : int = max_x - min_x + 1
+			var rh : int = max_y - min_y + 1
+			
+			# Skip tiny blobs (noise, single stray pixels, etc.)
+			if rw < min_cell_size or rh < min_cell_size:
+				continue
+			
+			rects.append({
+				"rect": Rect2i(min_x, min_y, rw, rh),
+				"confidence": 1.0,
+				"reason": "transparency"
+			})
+	
+	print("🔍 Transparency: ", rects.size(), " raw blobs from ", w, "x", h, " sheet")
+	return rects
+
+
+# =============================================================================
+# 🔗 MERGE CLOSE RECTS
+# =============================================================================
+# Reconnects blobs that are parts of the same sprite. For example: a character's
+# head and body with a 2-pixel transparent gap between them. Anything within
+# max_gap pixels on both axes gets merged into one bounding box.
+#
+# Runs iteratively until no more merges happen — one pass can create new
+# merge opportunities with a third rect that now overlaps.
+func _merge_close_rects(rects: Array, max_gap: int) -> Array:
+	if rects.size() < 2:
+		return rects
+	
+	var merged_any := true
+	while merged_any:
+		merged_any = false
+		var result : Array = []
+		var consumed := []
+		consumed.resize(rects.size())
+		for i in range(rects.size()):
+			consumed[i] = false
+		
+		for i in range(rects.size()):
+			if consumed[i]:
+				continue
+			
+			var a_rect : Rect2i = rects[i]["rect"]
+			var a_conf : float = rects[i]["confidence"]
+			
+			# Try to merge all later rects into `a` if they're close
+			for j in range(i + 1, rects.size()):
+				if consumed[j]:
+					continue
+				var b_rect : Rect2i = rects[j]["rect"]
+				if _rects_close(a_rect, b_rect, max_gap):
+					a_rect = a_rect.merge(b_rect)
+					a_conf = min(a_conf, rects[j]["confidence"])
+					consumed[j] = true
+					merged_any = true
+			
+			consumed[i] = true
+			result.append({
+				"rect": a_rect,
+				"confidence": a_conf,
+				"reason": "merged"
+			})
+		
+		rects = result
+	
+	print("🔗 After merge: ", rects.size(), " blobs")
+	return rects
+
+
+# =============================================================================
+# 🔗 RECT PROXIMITY CHECK
+# =============================================================================
+# Returns true if `a` and `b` are within `max_gap` pixels of each other
+# on BOTH the X and Y axes. Distance is measured edge-to-edge, not
+# center-to-center, so overlapping or touching rects are always "close".
+
+func _rects_close(a: Rect2i, b: Rect2i, max_gap: int) -> bool:
+	# Horizontal overlap check: how much of the two rects share X range
+	var x_overlap : int = min(a.end.x, b.end.x) - max(a.position.x, b.position.x)
+	# Vertical overlap check
+	var y_overlap : int = min(a.end.y, b.end.y) - max(a.position.y, b.position.y)
+	
+	# Horizontal gap: positive = space between them, negative = overlapping
+	var x_gap : int = max(0, max(a.position.x - b.end.x, b.position.x - a.end.x))
+	var y_gap : int = max(0, max(a.position.y - b.end.y, b.position.y - a.end.y))
+	
+	# Two rects are "close" if EITHER:
+	#   1. They're horizontally close AND overlap or nearly overlap on Y
+	#   2. They're vertically close AND overlap or nearly overlap on X
+	# This means "same row / same column" merging, not diagonal chaos.
+	
+	# Case 1: side by side (horizontally close, vertically aligned)
+	if x_gap <= max_gap and y_overlap >= -max_gap:
+		return true
+	
+	# Case 2: stacked (vertically close, horizontally aligned)
+	if y_gap <= max_gap and x_overlap >= -max_gap:
+		return true
+	
+	return false
+
+
+# =============================================================================
+# ✂️ SPLIT AT WAIST
+# =============================================================================
+# Splits blobs that are actually TWO sprites touching at a thin seam.
+# Example: two characters standing shoulder to shoulder, connected by a
+# few pixels of their arms meeting. The bounding box would merge them into
+# one blob. This function finds the "waist" — the thin columns where content
+# count drops to just a few pixels — and cuts there.
+#
+# Only splits horizontally (left/right). Vertical waist splitting isn't
+# implemented because two sprites rarely touch top-to-bottom in the same
+# way — you'd usually want them separate for other reasons anyway.
+func _split_at_waist(rects: Array, image: Image, bg: Color) -> Array:
+	var result : Array = []
+	
+	for cell in rects:
+		var r : Rect2i = cell["rect"]
+		var sub_rects := _find_waist_splits(r, image, bg)
+		
+		if sub_rects.size() > 1:
+			# Blob was split — add each piece with slightly lower confidence
+			for s in sub_rects:
+				result.append({
+					"rect": s,
+					"confidence": cell["confidence"] * 0.9,
+					"reason": "waist_split"
+				})
+		else:
+			# No split — keep original blob
+			result.append(cell)
+	
+	print("✂️ After waist split: ", result.size(), " blobs")
+	return result
+
+
+# =============================================================================
+# ✂️ FIND WAIST SPLITS
+# =============================================================================
+# Given one bounding box, walks column by column and counts how many content
+# pixels are in that column. Columns with very few content pixels (< waist_min_pixels)
+# are "seams" where two sprites touch. Splits the box at each contiguous
+# run of thin columns.
+
+func _find_waist_splits(r: Rect2i, image: Image, bg: Color) -> Array:
+	var w := image.get_width()
+	var h := image.get_height()
+	var bg_is_opaque : bool = bg.a >= 0.5
+	
+	var col_counts := PackedInt32Array()
+	col_counts.resize(r.size.x)
+	for cx in range(r.size.x):
+		var count := 0
+		for cy in range(r.size.y):
+			var px_x := r.position.x + cx
+			var px_y := r.position.y + cy
+			if px_x < 0 or px_x >= w or px_y < 0 or px_y >= h:
+				continue
+			var px := image.get_pixel(px_x, px_y)
+			var ok : bool = px.a > transparency_alpha_cutoff
+			if ok and bg_is_opaque:
+				ok = not _colors_close(px, bg, bg_tolerance)
+			if ok:
+				count += 1
+		col_counts[cx] = count
+	
+	var row_counts := PackedInt32Array()
+	row_counts.resize(r.size.y)
+	for cy in range(r.size.y):
+		var count := 0
+		for cx in range(r.size.x):
+			var px_x := r.position.x + cx
+			var px_y := r.position.y + cy
+			if px_x < 0 or px_x >= w or px_y < 0 or px_y >= h:
+				continue
+			var px := image.get_pixel(px_x, px_y)
+			var ok : bool = px.a > transparency_alpha_cutoff
+			if ok and bg_is_opaque:
+				ok = not _colors_close(px, bg, bg_tolerance)
+			if ok:
+				count += 1
+		row_counts[cy] = count
+	
+	# ---- DEBUG: dump the counts so we can see what's happening ----
+	print("━━━ WAIST SCAN for rect ", r, " ━━━")
+	print("  col_counts (first 40): ", _sample_counts(col_counts, 40))
+	print("  row_counts (first 40): ", _sample_counts(row_counts, 40))
+	
+	var col_splits : Array = _find_real_waists(col_counts, r.position.x, "COL")
+	var row_splits : Array = _find_real_waists(row_counts, r.position.y, "ROW")
+	
+	print("  col_splits=", col_splits, " row_splits=", row_splits)
+	
+	if col_splits.is_empty() and row_splits.is_empty():
+		return [r]
+	
+	var col_pieces : Array = []
+	var prev_x : int = r.position.x
+	var right_edge : int = r.position.x + r.size.x
+	for split_x in col_splits:
+		if split_x > prev_x:
+			var sw : int = split_x - prev_x
+			if sw >= min_cell_size:
+				col_pieces.append(Rect2i(prev_x, r.position.y, sw, r.size.y))
+		prev_x = split_x + 1
+	if prev_x < right_edge:
+		var sw : int = right_edge - prev_x
+		if sw >= min_cell_size:
+			col_pieces.append(Rect2i(prev_x, r.position.y, sw, r.size.y))
+	
+	if col_pieces.is_empty():
+		col_pieces = [r]
+	
+	var sub_rects : Array = []
+	for piece in col_pieces:
+		var prev_y : int = piece.position.y
+		var bottom_edge : int = piece.position.y + piece.size.y
+		for split_y in row_splits:
+			if split_y <= piece.position.y or split_y >= bottom_edge:
+				continue
+			if split_y > prev_y:
+				var sh : int = split_y - prev_y
+				if sh >= min_cell_size:
+					sub_rects.append(Rect2i(piece.position.x, prev_y, piece.size.x, sh))
+			prev_y = split_y + 1
+		if prev_y < bottom_edge:
+			var sh : int = bottom_edge - prev_y
+			if sh >= min_cell_size:
+				sub_rects.append(Rect2i(piece.position.x, prev_y, piece.size.x, sh))
+	
+	if sub_rects.is_empty():
+		return [r]
+	return sub_rects
+
+
+# Helper: dump a sample of a PackedInt32Array for debugging
+func _sample_counts(arr: PackedInt32Array, n: int) -> Array:
+	var out : Array = []
+	var limit : int = min(n, arr.size())
+	for i in range(limit):
+		out.append(arr[i])
+	return out
+
+
+func _find_real_waists(counts: PackedInt32Array, offset: int, tag: String) -> Array:
+	if counts.size() < 5:
+		return []
+	
+	var nonzero : Array = []
+	for c in counts:
+		if c > 0:
+			nonzero.append(c)
+	if nonzero.size() == 0:
+		return []
+	nonzero.sort()
+	var reference : int = nonzero[nonzero.size() / 2]
+	var thick_threshold : int = int(reference * 0.6)
+	
+	print("  [", tag, "] reference=", reference, " thick=", thick_threshold, " waist_max=", waist_min_pixels)
+	
+	var candidates : Array = []
+	for i in range(counts.size()):
+		if counts[i] > waist_min_pixels:
+			continue
+		
+		var has_left : bool = false
+		var has_right : bool = false
+		for k in range(1, 3):
+			if i - k >= 0 and counts[i - k] >= thick_threshold:
+				has_left = true
+				break
+		for k in range(1, 3):
+			if i + k < counts.size() and counts[i + k] >= thick_threshold:
+				has_right = true
+				break
+		
+		if has_left and has_right:
+			candidates.append(i)
+			print("  [", tag, "] candidate at local idx=", i, " (global=", offset + i, ") count=", counts[i])
+	
+	var splits : Array = []
+	var i := 0
+	while i < candidates.size():
+		var start : int = candidates[i]
+		var end : int = start
+		while i + 1 < candidates.size() and candidates[i + 1] == candidates[i] + 1:
+			i += 1
+			end = candidates[i]
+		var run_width : int = end - start + 1
+		
+		if run_width <= 2:
+			var mid : int = (start + end) / 2
+			splits.append(offset + mid)
+			print("  [", tag, "] ACCEPTED split at ", offset + mid, " (run width ", run_width, ")")
+		else:
+			print("  [", tag, "] REJECTED run at ", offset + start, " (width ", run_width, " too wide)")
+		
+		i += 1
+	
+	return splits
+
+# =============================================================================
+# 🎯 KEEP DOMINANT ROW
+# =============================================================================
+# For single-row animation sheets, keeps only the largest detected row and
+# discards stragglers that got mis-grouped into other rows. Useful when a
+# merge step can't reconnect every stray piece to its parent sprite.
+#
+# Safety: only fires if the dominant row is at least 3x the size of the
+# second-biggest row. That prevents this from accidentally dropping a real
+# second row of animations (like on a 1280x128 double-row sheet).
+func _keep_dominant_row(cells: Array) -> Array:
+	if cells.size() < 2:
+		return cells
+	
+	# Group cells into rows using the existing row-grouping logic
+	var rows := _group_cells_by_row(cells)
+	if rows.size() <= 1:
+		return cells
+	
+	# Find the biggest row
+	var biggest : Array = rows[0]
+	var biggest_idx : int = 0
+	for i in range(rows.size()):
+		var row = rows[i]
+		if row.size() > biggest.size():
+			biggest = row
+			biggest_idx = i
+	
+	# Find the second-biggest row size
+	var second_size : int = 0
+	for i in range(rows.size()):
+		if i == biggest_idx:
+			continue
+		var row = rows[i]
+		if row.size() > second_size:
+			second_size = row.size()
+	
+	# Only keep dominant row if it's clearly bigger (3x safety margin)
+	if biggest.size() >= second_size * 3:
+		print("🎯 Kept dominant row (", biggest.size(), " cells), discarded ",
+			cells.size() - biggest.size(), " stragglers from ", rows.size() - 1, " other row(s)")
+		return biggest
+	
+	return cells
+
+
+# =============================================================================
+# 🔨 REBUILD CENTERED SHEET
+# =============================================================================
+# Takes the detected sprite rects, extracts each sprite's actual pixels, and
+# writes them into a brand-new image where every sprite is centered in a
+# uniform cell. Fixes jitter caused by misaligned source art.
+#
+# Returns a dictionary: { "image": Image, "cells": Array, "cell_size": Vector2i }
+# =============================================================================
+# 🔨 REBUILD CENTERED SHEET
+# =============================================================================
+# Takes detected sprite rects, extracts each sprite's pixels, and writes them
+# into a brand-new image where every sprite is anchored at the SAME relative
+# position within its cell. The anchor is the sprite's body center (the row
+# with the most pixels), which is stable across asymmetric frames.
+func _rebuild_centered_sheet(cells: Array, source: Image, bg: Color) -> Dictionary:
+	if cells.is_empty():
+		return {"image": source, "cells": cells, "cell_size": Vector2i.ZERO}
+	
+	var bg_is_opaque : bool = bg.a >= 0.5
+	var w := source.get_width()
+	var h := source.get_height()
+	
+	# ── Pass 1: find max extent from anchor in each direction ──
+	var max_extent_left : int = 0
+	var max_extent_right : int = 0
+	var max_extent_up : int = 0
+	var max_extent_down : int = 0
+	
+	for cell in cells:
+		var r : Rect2i = cell["rect"]
+		var content := _find_content_bounds(source, r, bg, bg_is_opaque)
+		var anchor := _find_anchor_point(source, r, bg, bg_is_opaque)
+		var left : int = anchor.x - content.position.x
+		var right : int = (content.position.x + content.size.x) - anchor.x
+		var up : int = anchor.y - content.position.y
+		var down : int = (content.position.y + content.size.y) - anchor.y
+		if left > max_extent_left: max_extent_left = left
+		if right > max_extent_right: max_extent_right = right
+		if up > max_extent_up: max_extent_up = up
+		if down > max_extent_down: max_extent_down = down
+	
+	max_extent_left += 2
+	max_extent_right += 2
+	max_extent_up += 2
+	max_extent_down += 2
+	
+	var cell_w : int = max_extent_left + max_extent_right
+	var cell_h : int = max_extent_up + max_extent_down
+	var anchor_local_x : int = max_extent_left
+	var anchor_local_y : int = max_extent_up
+	
+	# ── Pass 2: build new image ──
+	var count := cells.size()
+	var new_img := Image.create(cell_w * count, cell_h, false, Image.FORMAT_RGBA8)
+	new_img.fill(Color(0, 0, 0, 0))
+	
+	var new_cells : Array = []
+	
+	for i in range(count):
+		var r : Rect2i = cells[i]["rect"]
+		var content := _find_content_bounds(source, r, bg, bg_is_opaque)
+		var anchor := _find_anchor_point(source, r, bg, bg_is_opaque)
+		
+		var dst_x_base : int = i * cell_w
+		var dst_y_base : int = 0
+		
+		var dst_anchor_x : int = dst_x_base + anchor_local_x
+		var dst_anchor_y : int = dst_y_base + anchor_local_y
+		
+		var offset_x : int = dst_anchor_x - anchor.x
+		var offset_y : int = dst_anchor_y - anchor.y
+		
+		for cy in range(content.size.y):
+			var src_y : int = content.position.y + cy
+			if src_y < 0 or src_y >= h:
+				continue
+			var dst_y : int = src_y + offset_y
+			if dst_y < 0 or dst_y >= cell_h:
+				continue
+			for cx in range(content.size.x):
+				var src_x : int = content.position.x + cx
+				if src_x < 0 or src_x >= w:
+					continue
+				var dst_x : int = src_x + offset_x
+				if dst_x < 0 or dst_x >= cell_w * count:
+					continue
+				var px := source.get_pixel(src_x, src_y)
+				if px.a > 0:
+					new_img.set_pixel(dst_x, dst_y, px)
+		
+		new_cells.append({
+			"rect": Rect2i(dst_x_base, dst_y_base, cell_w, cell_h),
+			"confidence": cells[i]["confidence"],
+			"reason": "rebuilt_anchored"
+		})
+	
+	print("🔨 Rebuilt sheet (anchored): ", count, " cells of ", cell_w, "x", cell_h,
+		" → new image ", new_img.get_width(), "x", new_img.get_height())
+	
+	return {
+		"image": new_img,
+		"cells": new_cells,
+		"cell_size": Vector2i(cell_w, cell_h)
+	}

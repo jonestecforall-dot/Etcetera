@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://ibxa4ku4y106"]
+
+[ext_resource type="Script" uid="uid://ve2p36ut8mpe" path="res://back_ground_menu_node.gd" id="1_i2qqd"]
+
+[node name="BackGroundMenuNode" type="TextureRect" unique_id=1957666259]
+z_index = 300
+script = ExtResource("1_i2qqd")
+formation = 2
+color_a = Color(0.85516155, 0.5271416, 0.6183414, 1)
+color_b = Color(0.83207405, 0.244355, 0.12879586, 1)
+color_c = Color(0.60563046, 0.19196504, 0.69306856, 1)
+background_color = Color(0.6474298, 0.23598742, 0.4149266, 1)
+color_blend_speed = 0.5
+wave_speed = 1.2

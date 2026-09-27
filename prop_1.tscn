@@ -1,0 +1,15 @@
+[gd_scene format=3 uid="uid://ohlscrjh0qri"]
+
+[ext_resource type="Script" uid="uid://cn60fcgc0k0kj" path="res://prop_1.gd" id="1_hn1wc"]
+[ext_resource type="Texture2D" uid="uid://dsmhg1fx5fi0u" path="res://AnimationsFolder/fourSeasonsPlatformer_ [tileset, version 2.0]/background_/terrain_.png" id="2_hn1wc"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ppp2m"]
+atlas = ExtResource("2_hn1wc")
+region = Rect2(120, 17, 7, 7)
+
+[node name="Prop1" type="Node2D" unique_id=730909890]
+script = ExtResource("1_hn1wc")
+rock_texture = SubResource("AtlasTexture_ppp2m")
+rock_size = Vector2(124, 124)
+rock_z_index = 1
+collision_shape_type = 1

@@ -8,7 +8,9 @@ var root : Node = null
 var sheets : Array = []
 var selected_sheet_index : int = 0
 var selected_row_index : int = 0
-
+# Per-sheet detection mode override
+# 0 = GRID (default), 1 = TRANSPARENCY
+var _sheet_detection_modes : Dictionary = {}
 var row_name_inputs : Array = []
 
 # Animation player state
@@ -54,6 +56,8 @@ var subtitle_label : Label
 var sheet_row : HBoxContainer
 var sheet_buttons : Array = []
 var status_label : Label
+
+var menu_btn : Button
 
 var preview_panel : Panel
 var preview_title : Label
@@ -101,6 +105,7 @@ func _ready() -> void:
 # =============================================================================
 # 🎨 BUILD UI
 # =============================================================================
+
 func _build_ui() -> void:
 	root_control = Control.new()
 	root_control.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -135,6 +140,19 @@ func _build_ui() -> void:
 	root_control.add_child(subtitle_label)
 	
 	# =====================================================================
+	# MENU BUTTON (top right)
+	# =====================================================================
+	menu_btn = _make_button("☰  Menu", COL_ACCENT_DARK, false)
+	menu_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	menu_btn.offset_left = -170
+	menu_btn.offset_right = -24
+	menu_btn.offset_top = 16
+	menu_btn.offset_bottom = 56
+	menu_btn.custom_minimum_size = Vector2(140, 40)
+	menu_btn.pressed.connect(_on_menu_pressed)
+	root_control.add_child(menu_btn)
+	
+	# =====================================================================
 	# SHEET TABS ROW (prev arrow + up to 6 tabs + next arrow)
 	# =====================================================================
 	sheet_row = HBoxContainer.new()
@@ -142,14 +160,12 @@ func _build_ui() -> void:
 	sheet_row.add_theme_constant_override("separation", 8)
 	root_control.add_child(sheet_row)
 	
-	# Prev arrow (only visible if > 6 sheets)
 	prev_tab_btn = _make_tab_button("◄")
 	prev_tab_btn.custom_minimum_size = Vector2(34, 30)
 	prev_tab_btn.pressed.connect(_on_prev_tab_pressed)
 	prev_tab_btn.visible = false
 	sheet_row.add_child(prev_tab_btn)
 	
-	# Next arrow (only visible if > 6 sheets)
 	next_tab_btn = _make_tab_button("►")
 	next_tab_btn.custom_minimum_size = Vector2(34, 30)
 	next_tab_btn.pressed.connect(_on_next_tab_pressed)
@@ -163,7 +179,7 @@ func _build_ui() -> void:
 	root_control.add_child(status_label)
 	
 	# =====================================================================
-	# LEFT: Preview panel (compact, 376px wide)
+	# LEFT: Preview panel
 	# =====================================================================
 	preview_panel = Panel.new()
 	preview_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
@@ -200,7 +216,7 @@ func _build_ui() -> void:
 	preview_display.add_child(preview_overlay)
 	
 	# =====================================================================
-	# CENTER: Info panel (top of middle column)
+	# CENTER: Info panel
 	# =====================================================================
 	info_panel = Panel.new()
 	info_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
@@ -226,7 +242,7 @@ func _build_ui() -> void:
 	info_panel.add_child(info_label)
 	
 	# =====================================================================
-	# CENTER: Rows / animations list (fills the rest of the middle column)
+	# CENTER: Rows / animations list
 	# =====================================================================
 	rows_panel = Panel.new()
 	rows_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
@@ -261,7 +277,7 @@ func _build_ui() -> void:
 	rows_scroll.add_child(rows_container)
 	
 	# =====================================================================
-	# RIGHT: Live animation panel (TALL — full column height)
+	# RIGHT: Live animation panel
 	# =====================================================================
 	anim_panel = Panel.new()
 	anim_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
@@ -315,6 +331,28 @@ func _build_ui() -> void:
 	re_detect_btn.pressed.connect(_on_re_detect_pressed)
 	button_row.add_child(re_detect_btn)
 	
+	# ── DETECTION MODE TOGGLE (lives here, next to Re-Detect) ──────
+	var toggle_container = HBoxContainer.new()
+	toggle_container.name = "DetectionToggleRow"
+	toggle_container.add_theme_constant_override("separation", 0)
+	
+	var grid_btn = _make_tab_button("Grid")
+	grid_btn.name = "GridBtn"
+	grid_btn.custom_minimum_size = Vector2(90, 40)
+	grid_btn.add_theme_font_size_override("font_size", 13)
+	grid_btn.pressed.connect(func(): _set_sheet_detection_mode(0))
+	toggle_container.add_child(grid_btn)
+	
+	var transp_btn = _make_tab_button("Transparency")
+	transp_btn.name = "TranspBtn"
+	transp_btn.custom_minimum_size = Vector2(130, 40)
+	transp_btn.add_theme_font_size_override("font_size", 13)
+	transp_btn.pressed.connect(func(): _set_sheet_detection_mode(1))
+	toggle_container.add_child(transp_btn)
+	
+	button_row.add_child(toggle_container)
+	# ───────────────────────────────────────────────────────────────
+	
 	save_btn = _make_button("💾  Save Row As .tres", COL_PURPLE, true)
 	save_btn.pressed.connect(_on_save_pressed)
 	button_row.add_child(save_btn)
@@ -353,6 +391,9 @@ func on_sheets_detected(new_sheets: Array) -> void:
 	_refresh_sheet_tabs()
 	_refresh_sheet_view()
 	status_label.text = "Detected %d sheet(s)." % sheets.size()
+
+func _on_menu_pressed() -> void:
+	get_tree().change_scene_to_file("res://intro_menu.tscn")
 
 func _on_re_detect_pressed() -> void:
 	if root and root.has_method("detect_all"):
@@ -409,19 +450,16 @@ func _on_export_all_pressed() -> void:
 		if rows.is_empty():
 			continue
 		
-		# Count how many rows are actually named
 		var named_rows : Array = []
 		for r in range(rows.size()):
 			var nm = _get_stored_name(i, r).strip_edges()
 			if nm != "":
 				named_rows.append({"row": r, "name": nm})
 		
-		# Skip if nothing named
 		if named_rows.is_empty():
 			skipped.append("Sheet %d" % i)
 			continue
 		
-		# 🔥 Only ONE name filled in → use it for the WHOLE sheet (all rows merged)
 		if named_rows.size() == 1:
 			var row_name = named_rows[0]["name"]
 			var path = "res://sprite_frames/%s.tres" % row_name
@@ -445,7 +483,6 @@ func _on_export_all_pressed() -> void:
 						return
 			continue
 		
-		# 🔥 MULTIPLE names filled in → save each named row separately
 		for entry in named_rows:
 			var row_name = entry["name"]
 			var r = entry["row"]
@@ -529,16 +566,14 @@ func _on_delete_confirmed() -> void:
 		status_label.text = "🗑  Deleted %d .tres files from sprite_frames/" % deleted
 
 # =============================================================================
-# 🖼 SHEET TABS (max 6 visible, arrows for paging)
+# 🖼 SHEET TABS
 # =============================================================================
 func _refresh_sheet_tabs() -> void:
-	# Remove only the tab buttons (keep prev/next arrows)
 	for c in sheet_buttons:
 		if is_instance_valid(c):
 			c.queue_free()
 	sheet_buttons.clear()
 	
-	# Clamp the visible window
 	if sheets.size() <= MAX_VISIBLE_TABS:
 		visible_tab_start = 0
 	else:
@@ -546,19 +581,14 @@ func _refresh_sheet_tabs() -> void:
 	
 	var end_idx : int = min(visible_tab_start + MAX_VISIBLE_TABS, sheets.size())
 	
-	# Re-add tabs AFTER the prev arrow but BEFORE the next arrow
-	# Current sheet_row children: [prev_tab_btn, next_tab_btn]
-	# We'll insert tabs between them
 	for i in range(visible_tab_start, end_idx):
 		var b = _make_tab_button("Sheet %d" % i)
 		var idx = i
 		b.pressed.connect(func(): _select_sheet(idx))
 		sheet_row.add_child(b)
-		# Move it before the next_tab_btn
 		sheet_row.move_child(b, sheet_row.get_child_count() - 2)
 		sheet_buttons.append(b)
 	
-	# Show arrows only if needed
 	prev_tab_btn.visible = sheets.size() > MAX_VISIBLE_TABS
 	next_tab_btn.visible = sheets.size() > MAX_VISIBLE_TABS
 	prev_tab_btn.disabled = (visible_tab_start == 0)
@@ -579,7 +609,6 @@ func _on_next_tab_pressed() -> void:
 func _refresh_sheet_tab_state() -> void:
 	for i in range(sheet_buttons.size()):
 		var btn = sheet_buttons[i]
-		# The sheet index this button represents:
 		var real_index : int = visible_tab_start + i
 		if real_index == selected_sheet_index:
 			btn.add_theme_stylebox_override("normal", _style(COL_ACCENT_DARK, COL_ACCENT, 2, 6))
@@ -591,7 +620,6 @@ func _refresh_sheet_tab_state() -> void:
 func _select_sheet(idx: int) -> void:
 	selected_sheet_index = idx
 	selected_row_index = 0
-	# Ensure the selected sheet is visible in the tab window
 	if idx < visible_tab_start:
 		visible_tab_start = idx
 	elif idx >= visible_tab_start + MAX_VISIBLE_TABS:
@@ -625,6 +653,9 @@ func _refresh_sheet_view() -> void:
 			selected_sheet_index, size.x, size.y, cells.size(), rows.size(), avg.x, avg.y
 		]
 	)
+	
+	# ── Update detection toggle button colors based on this sheet's mode ──
+	_update_detection_toggle_buttons()
 	
 	_clear_rows()
 	row_name_inputs.clear()
@@ -678,13 +709,64 @@ func _refresh_sheet_view() -> void:
 		hbox.add_child(play_btn)
 		
 		rows_container.add_child(hbox)
+# =============================================================================
+# 🔍 UPDATE DETECTION TOGGLE BUTTON COLORS
+# =============================================================================
+func _update_detection_toggle_buttons() -> void:
+	var toggle_row = root_control.get_node_or_null("DetectionToggleRow")
+	if toggle_row == null:
+		return
+	var current_mode : int = _sheet_detection_modes.get(selected_sheet_index, 0)
+	var grid_btn = toggle_row.get_node_or_null("GridBtn")
+	var transp_btn = toggle_row.get_node_or_null("TranspBtn")
+	
+	if grid_btn:
+		if current_mode == 0:
+			grid_btn.add_theme_stylebox_override("normal", _style(COL_ACCENT_DARK, COL_ACCENT, 2, 6))
+			grid_btn.add_theme_color_override("font_color", Color.WHITE)
+		else:
+			grid_btn.add_theme_stylebox_override("normal", _style(COL_PANEL_ALT, COL_BORDER, 1, 6))
+			grid_btn.add_theme_color_override("font_color", COL_TEXT_DIM)
+	
+	if transp_btn:
+		if current_mode == 1:
+			transp_btn.add_theme_stylebox_override("normal", _style(COL_ACCENT_DARK, COL_ACCENT, 2, 6))
+			transp_btn.add_theme_color_override("font_color", Color.WHITE)
+		else:
+			transp_btn.add_theme_stylebox_override("normal", _style(COL_PANEL_ALT, COL_BORDER, 1, 6))
+			transp_btn.add_theme_color_override("font_color", COL_TEXT_DIM)
+
 
 func _clear_rows() -> void:
 	for c in rows_container.get_children():
 		c.queue_free()
 
 # =============================================================================
-# 🎬 PLAY ANIMATION AS A GIF (cycle TextureRect.texture)
+# 🔍 DETECTION MODE TOGGLE
+# =============================================================================
+func _set_sheet_detection_mode(mode: int) -> void:
+	_sheet_detection_modes[selected_sheet_index] = mode
+	
+	if root == null:
+		status_label.text = "⚠️ Root missing"
+		return
+	if not root.has_method("redetect_sheet_with_mode"):
+		status_label.text = "⚠️ Root missing redetect_sheet_with_mode()"
+		return
+	
+	var ok = root.redetect_sheet_with_mode(selected_sheet_index, mode)
+	if ok:
+		# Pull the updated sheet data back from root
+		if "detected_sheets" in root:
+			sheets = root.detected_sheets
+		_refresh_sheet_view()
+		var mode_label : String = "Grid" if mode == 0 else "Transparency"
+		status_label.text = "🔍 Sheet %d re-detected with mode: %s" % [selected_sheet_index, mode_label]
+	else:
+		status_label.text = "❌ Re-detect failed for sheet %d" % selected_sheet_index
+
+# =============================================================================
+# 🎬 PLAY ANIMATION
 # =============================================================================
 func _play_row_preview(sheet_idx: int, row_idx: int) -> void:
 	if sheets.is_empty():
@@ -817,7 +899,9 @@ func _style(bg: Color, border: Color, border_w: int, radius: int) -> StyleBoxFla
 func _make_button(text: String, color: Color, wide: bool = false) -> Button:
 	var btn := Button.new()
 	btn.text = text
-	btn.custom_minimum_size = Vector2(180 if wide else 80, 40)
+	# ✅ FIXED: GDScript ternary (was `180 if wide else 80`)
+	var min_width : int = 180 if wide else 80
+	btn.custom_minimum_size = Vector2(min_width, 40)
 	btn.add_theme_font_size_override("font_size", 13)
 	btn.add_theme_color_override("font_color", Color.WHITE)
 	var style := StyleBoxFlat.new()

@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://inqn1pm0rnuk"
+path="res://.godot/imported/TRR_ThrashMetal_Lvl_5-2.ogg-2348699c8303151a5fed1471e00ee8d0.oggvorbisstr"
+
+[deps]
+
+source_file="res://Etcetera Music Folder/TRR_ThrashMetal_Lvl_5-2.ogg"
+dest_files=["res://.godot/imported/TRR_ThrashMetal_Lvl_5-2.ogg-2348699c8303151a5fed1471e00ee8d0.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

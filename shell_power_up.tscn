@@ -1,0 +1,39 @@
+[gd_scene format=3 uid="uid://c744uge5hiqie"]
+
+[ext_resource type="Script" uid="uid://blv2y6tst2f8f" path="res://shell_power_up.gd" id="1_kfdbj"]
+[ext_resource type="Script" uid="uid://bq8b7d3gaq5s3" path="res://power_up_1.gd" id="2_n74of"]
+[ext_resource type="Texture2D" uid="uid://bjvw2gbofujoj" path="res://AnimationsFolder/shell_bubble_spritesheet (1).png" id="2_upkdu"]
+[ext_resource type="Script" uid="uid://ctbtcmm63yk4n" path="res://magnet_power.gd" id="3_pnbdk"]
+[ext_resource type="Script" uid="uid://coyipfksyq40t" path="res://anvil_power_up.gd" id="4_locbh"]
+[ext_resource type="Script" uid="uid://46x5hbjfciqc" path="res://balloon_powerup.gd" id="5_hhf33"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_g7b7a"]
+
+[node name="ShellPowerUp" type="Node2D" unique_id=873144141 node_paths=PackedStringArray("power_up_nodes", "sprite_node", "collision_area")]
+texture_filter = 1
+script = ExtResource("1_kfdbj")
+shell_textures = Array[Texture2D]([ExtResource("2_upkdu")])
+shell_names = Array[String](["Bubble Deep", "Magnet Pull", "Anvil Smash", "Balloon Float"])
+power_up_nodes = [NodePath("Bubble"), NodePath("MagnetPower"), NodePath("AnvilPowerUp"), NodePath("BalloonPowerup")]
+sprite_node = NodePath("Sprite2D")
+collision_area = NodePath("Area2D")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=145465247]
+shape = SubResource("CircleShape2D_g7b7a")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=424025068]
+scale = Vector2(3, 3)
+
+[node name="Bubble" type="Node" parent="." unique_id=1478119603]
+script = ExtResource("2_n74of")
+
+[node name="MagnetPower" type="Node" parent="." unique_id=1768111477]
+script = ExtResource("3_pnbdk")
+
+[node name="AnvilPowerUp" type="Node" parent="." unique_id=584735856]
+script = ExtResource("4_locbh")
+
+[node name="BalloonPowerup" type="Node" parent="." unique_id=1621107683]
+script = ExtResource("5_hhf33")
+
+[node name="Area2D" type="Area2D" parent="." unique_id=957050933]
