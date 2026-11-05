@@ -1,1 +1,3 @@
-# Etcetera
+# Etcetera-
+
+A Vast 2D Platformer with 4 Playable Characters. Six Worlds with Five Level's each. Five Mini Games. Blah Blah Beatz, Etcetera Chess, Etcetera Space Shooter, Etcetera Beat em Up and an Etcetera Idle Tap. Etcetera has been Developed on Android through Godot 4 Mobile and to be continued...
